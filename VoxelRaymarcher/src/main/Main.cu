@@ -2,6 +2,8 @@
 
 #include <time.h>
 
+#include "../geometry/VoxelCube.h"
+
 #include "../cuckoohash/CuckooHashTable.cuh"
 
 #define DEVICE_ID 0
@@ -34,46 +36,40 @@ int main()
 
 	srand(time(NULL));
 
-	const uint32_t size = 2048;
-	uint32_t* hostKeys = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * size));
-	uint32_t* hostValues = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * size));
+	std::unordered_map<uint32_t, uint32_t> voxelMap;
+	VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
+	CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
 
-	for (uint32_t i = 0; i < size; i++)
-	{
-		int key = generate3DInteger(rand() % 1024, rand() % 1024, rand() % 1024);
-		hostKeys[i] = key;
-		hostValues[i] = key;
-	}
-
-	CuckooHashTable hashTable = CuckooHashTable(hostKeys, hostValues, size);
-
-	//Move the hash table handle to the GPU
-	CuckooHashTable* deviceHashTable;
-	cudaMalloc(&deviceHashTable, sizeof(CuckooHashTable));
-	cudaMemcpy(deviceHashTable, &hashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
+	//Hash table's GPU handle
+	CuckooHashTable* deviceVoxelHashTable;
+	//Move the hash table to the GPU
+	cudaMalloc(&deviceVoxelHashTable, sizeof(CuckooHashTable));
+	cudaMemcpy(deviceVoxelHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
 
 	uint32_t* hostLookupKeys, * deviceLookupKeys;
 	const uint32_t numLookupKeys = 128;
 	hostLookupKeys = static_cast<uint32_t*>(malloc(sizeof(uint32_t) * numLookupKeys));
 	cudaMalloc(&deviceLookupKeys, sizeof(uint32_t) * numLookupKeys);
 
-	for (uint32_t i = 0; i < numLookupKeys; i++)
+	uint32_t counter = 0;
+	for (auto iterator = voxelMap.begin(); iterator != voxelMap.end(); ++iterator)
 	{
-		hostLookupKeys[i] = hostKeys[rand() % 2048];
+		if (counter >= numLookupKeys)
+			break;
+		hostLookupKeys[counter] = iterator->first;
+		counter++;
 	}
 
 	cudaMemcpy(deviceLookupKeys, hostLookupKeys, numLookupKeys * sizeof(uint32_t), cudaMemcpyHostToDevice);
 
-	testLookupFunc<<<(numLookupKeys + 255) / 256, 256>>> (deviceLookupKeys, numLookupKeys, deviceHashTable);
+	testLookupFunc<<<(numLookupKeys + 255) / 256, 256>>> (deviceLookupKeys, numLookupKeys, deviceVoxelHashTable);
 
 	cudaDeviceSynchronize();
 
-	free(hostKeys);
-	free(hostValues);
 	free(hostLookupKeys);
 
 	cudaFree(deviceLookupKeys);
-	cudaFree(deviceHashTable);
+	cudaFree(deviceVoxelHashTable);
 		
 	return EXIT_SUCCESS;
 }

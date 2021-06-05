@@ -12,40 +12,19 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\main\Main.cu" />
-    <CudaCompile Include="src\slabhash\SlabAlloc\src\slab_alloc.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\cuckoohash\cuckoo.cuh" />
     <ClInclude Include="src\cuckoohash\CuckooHashTable.cuh" />
+    <ClInclude Include="src\geometry\VoxelCube.h" />
+    <ClInclude Include="src\geometry\VoxelFunctions.h" />
     <ClInclude Include="src\renderer\images\Image.h" />
     <ClInclude Include="src\renderer\images\ImageLoader.h" />
     <ClInclude Include="src\renderer\images\ImageWriter.h" />
     <ClInclude Include="src\renderer\rays\Ray.cuh" />
-    <ClInclude Include="src\slabhash\SlabAlloc\src\slab_alloc.cuh" />
-    <ClInclude Include="src\slabhash\SlabAlloc\src\slab_alloc_global.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\cmap_class.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\cmap_implementation.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\build.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\concurrent_kernel.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\count_kernel.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\delete_kernel.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\misc_kernels.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\device\search_kernel.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\warp\count.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\warp\delete.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\warp\insert.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_map\warp\search.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_set\cset_class.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_set\cset_helper_kernels.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_set\cset_implementation.cuh" />
-    <ClInclude Include="src\slabhash\src\concurrent_set\cset_warp_operations.cuh" />
-    <ClInclude Include="src\slabhash\src\gpu_hash_table.cuh" />
-    <ClInclude Include="src\slabhash\src\slab_hash.cuh" />
-    <ClInclude Include="src\slabhash\src\slab_hash_global.cuh" />
-    <ClInclude Include="src\slabhash\src\slab_hash_helper_methods.cuh" />
-    <ClInclude Include="src\slabhash\src\slab_iterator.cuh" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\geometry\VoxelCube.cpp" />
+    <ClCompile Include="src\geometry\VoxelFunctions.cpp" />
     <ClCompile Include="src\renderer\images\ImageLoader.cpp" />
     <ClCompile Include="src\renderer\images\ImageWriter.cpp" />
   </ItemGroup>
