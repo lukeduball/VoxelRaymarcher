@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include "../geometry/VoxelCube.h"
+#include "../geometry/VoxelSphere.h"
 
 #include "../cuckoohash/CuckooHashTable.cuh"
 
@@ -37,7 +38,8 @@ int main()
 	srand(time(NULL));
 
 	std::unordered_map<uint32_t, uint32_t> voxelMap;
-	VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
+	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
+	VoxelSphere::generateVoxelSphere(voxelMap, 512, 512, 512, 50);
 	CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
 
 	//Hash table's GPU handle
