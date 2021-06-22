@@ -53,6 +53,141 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 	return 0;
 }
 
+__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure)
+{
+	//Ray needs to be aligned to grid first in the longest direction -- then the loop can occur
+	//Both -1.0f and 1.0f can be represented correctly so when orginally snapping to the grid an epsilon needs to be employed and will keep things the correct way
+
+	uint32_t longestAxis;
+	uint32_t shortAxis1;
+	uint32_t shortAxis2;
+
+	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, shortAxis1, shortAxis2);
+	Ray ray = oldRay;
+
+	int32_t nextGridValues[3] = { static_cast<int32_t>(ray.getOrigin().getX()), static_cast<int32_t>(ray.getOrigin().getY()), static_cast<int32_t>(ray.getOrigin().getZ()) };
+	int32_t longestAxisDiff = ray.getDirection()[longestAxis] < 0.0f ? -1 : 1;
+
+	//Snap the longest direction vector axis to the grid first
+	float t = ray.getDirection()[longestAxis] > 0.0f ?
+		(nextGridValues[longestAxis] + EPSILON + 1 - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis] :
+		(nextGridValues[longestAxis] - EPSILON - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis];
+	ray = Ray(ray.getOrigin() + ray.getDirection() * t, ray.getDirection());
+	int32_t shortAxis1Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis1]) - nextGridValues[shortAxis1];
+	int32_t shortAxis2Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis2]) - nextGridValues[shortAxis2];
+	if (shortAxis1Diff != 0 && shortAxis2Diff != 0)
+	{
+		float t1 = shortAxis1Diff == -1 ?
+			(std::floorf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1]
+			: (std::ceilf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1];
+		float t2 = shortAxis1Diff == -1 ?
+			(std::floorf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2]
+			: (std::ceilf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2];
+		if (t1 < t2)
+		{
+			nextGridValues[shortAxis1] += shortAxis1Diff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+		}
+		else
+		{
+			nextGridValues[shortAxis2] += shortAxis2Diff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+		}
+	}
+	else if (shortAxis1Diff != 0)
+	{
+		nextGridValues[shortAxis1] += shortAxis1Diff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		if (colorValue != EMPTY_KEY)
+		{
+			return colorValue;
+		}
+	}
+	else if (shortAxis2Diff != 0)
+	{
+		nextGridValues[shortAxis2] += shortAxis2Diff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		if (colorValue != EMPTY_KEY)
+		{
+			return colorValue;
+		}
+	}
+	nextGridValues[longestAxis] += longestAxisDiff;
+	uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+	if (colorValue != EMPTY_KEY)
+	{
+		return colorValue;
+	}
+
+	while (voxelStructure->isRayInStructure(ray))
+	{
+		Ray oldRay = ray;
+		ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
+		int32_t shortAxis1Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis1]) - nextGridValues[shortAxis1];
+		int32_t shortAxis2Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis2]) - nextGridValues[shortAxis2];
+		if (shortAxis1Diff != 0 && shortAxis2Diff != 0)
+		{
+			float t1 = shortAxis1Diff == -1 ?
+				((oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1]
+				: (std::ceilf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1];
+			float t2 = shortAxis1Diff == -1 ?
+				(std::floorf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2]
+				: (std::ceilf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2];
+			if (t1 < t2)
+			{
+				nextGridValues[shortAxis1] += shortAxis1Diff;
+				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+				if (colorValue != EMPTY_KEY)
+				{
+					return colorValue;
+				}
+			}
+			else
+			{
+				nextGridValues[shortAxis2] += shortAxis2Diff;
+				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+				if (colorValue != EMPTY_KEY)
+				{
+					return colorValue;
+				}
+			}
+		}
+		else if (shortAxis1Diff != 0)
+		{
+			nextGridValues[shortAxis1] += shortAxis1Diff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+		}
+		else if (shortAxis2Diff != 0)
+		{
+			nextGridValues[shortAxis2] += shortAxis2Diff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+		}
+		nextGridValues[longestAxis] += longestAxisDiff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		if (colorValue != EMPTY_KEY)
+		{
+			return colorValue;
+		}
+	}
+	return 0;
+}
+
 __global__ void rayMarchScene(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelStructure* voxelStructure, uint8_t* framebuffer)
 {
 	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
@@ -71,7 +206,7 @@ __global__ void rayMarchScene(uint32_t imgWidth, uint32_t imgHeight, Camera* cam
 	Ray localRay = ray.convertRayToLocalSpace(voxelStructure->translationVector, voxelStructure->scale);
 
 	//Raymarch the voxel grid and get a color back
-	uint32_t color = rayMarchVoxelGrid(localRay, voxelStructure);
+	uint32_t color = rayMarchVoxelGridAxisJump(localRay, voxelStructure);
 	
 	//Set the framebuffer location for that pixel to the returned color
 	uint32_t pixelIndex = yPixel * imgWidth * 3 + xPixel * 3;

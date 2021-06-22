@@ -42,7 +42,7 @@ int main()
 	uint32_t height = 1080;
 	float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
 
-	Camera camera = Camera(Vector3(0.0f, 0.0f, -356.0f), Vector3(0.0f, 0.0f, -357.0f), Vector3(0.0f, 1.0f, 0.0f), 90.0f, aspectRatio);
+	Camera camera = Camera(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, -1.0f), Vector3(0.0f, 1.0f, 0.0f), 90.0f, aspectRatio);
 	//copy the created camera to the GPU
 	Camera* deviceCamera;
 	cudaMalloc(&deviceCamera, sizeof(Camera));
@@ -55,7 +55,7 @@ int main()
 
 	std::unordered_map<uint32_t, uint32_t> voxelMap;
 	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
-	VoxelSphere::generateVoxelSphere(voxelMap, 512, 512, 512, 50);
+	VoxelSphere::generateVoxelSphere(voxelMap, 32, 32, 32, 10);
 	CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
 
 	//Hash table's GPU handle
@@ -64,15 +64,16 @@ int main()
 	cudaMalloc(&deviceVoxelHashTable, sizeof(CuckooHashTable));
 	cudaMemcpy(deviceVoxelHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
 
-	VoxelStructure voxelStructure = VoxelStructure(deviceVoxelHashTable, Vector3(-512.0f, -512.0f, -1024.0f), 1024);
+	VoxelStructure voxelStructure = VoxelStructure(deviceVoxelHashTable, Vector3(-32.0f, -32.0f, -64.0f), 64);
 
 	//Copy the voxel structure to the GPU
 	VoxelStructure* deviceVoxelStructure;
 	cudaMalloc(&deviceVoxelStructure, sizeof(VoxelStructure));
 	cudaMemcpy(deviceVoxelStructure, &voxelStructure, sizeof(VoxelStructure), cudaMemcpyHostToDevice);
 
-	dim3 blocks(width / 30 + 1, height / 30 + 1);
-	dim3 threads(30, 30);
+	uint32_t numThreads = 8;
+	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
+	dim3 threads(numThreads, numThreads);
 	rayMarchScene <<<blocks, threads>>>(width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer);
 
 	cudaDeviceSynchronize();
