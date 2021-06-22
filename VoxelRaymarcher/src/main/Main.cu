@@ -1,7 +1,5 @@
 ﻿#include <cuda_runtime.h>
 
-#include <time.h>
-
 #include "../geometry/VoxelCube.h"
 #include "../geometry/VoxelSphere.h"
 
@@ -35,8 +33,6 @@ int main()
 		cudaGetDeviceProperties(&devProp, DEVICE_ID);
 	}
 	printf("Device: %s\n", devProp.name);
-
-	srand(time(NULL));
 
 	uint32_t width = 1920;
 	uint32_t height = 1080;

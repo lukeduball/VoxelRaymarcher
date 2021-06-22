@@ -18,6 +18,7 @@
     <ClInclude Include="src\geometry\VoxelCube.h" />
     <ClInclude Include="src\geometry\VoxelFunctions.h" />
     <ClInclude Include="src\geometry\VoxelSphere.h" />
+    <ClInclude Include="src\math\MathConstants.cuh" />
     <ClInclude Include="src\math\Vector3.cuh" />
     <ClInclude Include="src\renderer\camera\Camera.cuh" />
     <ClInclude Include="src\renderer\images\Image.h" />

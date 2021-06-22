@@ -1,6 +1,8 @@
 ﻿#pragma once
 
+#include "../../math/MathConstants.cuh"
 #include "../../math/Vector3.cuh"
+
 #include "../rays/Ray.cuh"
 
 class Camera
@@ -8,7 +10,7 @@ class Camera
 public:
 	Camera(Vector3 o, Vector3 lookAt, Vector3 globalUp, float fieldOfView, float aspectRatio)
 	{
-		float halfHeight = tanf((fieldOfView * M_PI / 180.f) / 2.0f);
+		float halfHeight = tanf((fieldOfView * PI / 180.f) / 2.0f);
 		float halfWidth = halfHeight * aspectRatio;
 		origin = o;
 		Vector3 w = makeUnitVector(lookAt - origin);
