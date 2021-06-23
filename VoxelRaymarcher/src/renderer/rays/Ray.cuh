@@ -24,22 +24,46 @@ public:
 		if (xDirAbs > yDirAbs && xDirAbs > zDirAbs)
 		{
 			longestAxis = 0;
-			shortAxis1 = 1;
-			shortAxis2 = 2;
+			if (yDirAbs > zDirAbs)
+			{
+				shortAxis1 = 1;
+				shortAxis2 = 2;
+			}
+			else
+			{
+				shortAxis1 = 2;
+				shortAxis2 = 1;
+			}
 			constant = 1.0f / xDirAbs;
 		}
 		else if (yDirAbs > zDirAbs)
 		{
 			longestAxis = 1;
-			shortAxis1 = 0;
-			shortAxis2 = 2;
+			if (xDirAbs > zDirAbs)
+			{
+				shortAxis1 = 0;
+				shortAxis2 = 2;
+			}
+			else
+			{
+				shortAxis1 = 2;
+				shortAxis2 = 0;
+			}
 			constant = 1.0f / yDirAbs;
 		}
 		else
 		{
 			longestAxis = 2;
-			shortAxis1 = 0;
-			shortAxis2 = 1;
+			if (xDirAbs > yDirAbs)
+			{
+				shortAxis1 = 0;
+				shortAxis2 = 1;
+			}
+			else
+			{
+				shortAxis1 = 1;
+				shortAxis2 = 0;
+			}
 			constant = 1.0f / zDirAbs;
 		}
 		return Ray(ray.getOrigin(), ray.getDirection() * constant);

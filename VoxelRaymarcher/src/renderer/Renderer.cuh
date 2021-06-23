@@ -59,34 +59,41 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	//Both -1.0f and 1.0f can be represented correctly so when orginally snapping to the grid an epsilon needs to be employed and will keep things the correct way
 
 	uint32_t longestAxis;
-	uint32_t shortAxis1;
-	uint32_t shortAxis2;
+	uint32_t middleAxis;
+	uint32_t shortestAxis;
 
-	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, shortAxis1, shortAxis2);
+	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, middleAxis, shortestAxis);
 	Ray ray = oldRay;
 
-	int32_t nextGridValues[3] = { static_cast<int32_t>(ray.getOrigin().getX()), static_cast<int32_t>(ray.getOrigin().getY()), static_cast<int32_t>(ray.getOrigin().getZ()) };
+	int32_t gridValues[3] = { static_cast<int32_t>(floorf(ray.getOrigin().getX())), static_cast<int32_t>(floorf(ray.getOrigin().getY())), static_cast<int32_t>(floorf(ray.getOrigin().getZ())) };
 	int32_t longestAxisDiff = ray.getDirection()[longestAxis] < 0.0f ? -1 : 1;
 
 	//Snap the longest direction vector axis to the grid first
 	float t = ray.getDirection()[longestAxis] > 0.0f ?
-		(nextGridValues[longestAxis] + EPSILON + 1 - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis] :
-		(nextGridValues[longestAxis] - EPSILON - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis];
+		(gridValues[longestAxis] + EPSILON + 1 - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis] :
+		(gridValues[longestAxis] - EPSILON - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis];
 	ray = Ray(ray.getOrigin() + ray.getDirection() * t, ray.getDirection());
-	int32_t shortAxis1Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis1]) - nextGridValues[shortAxis1];
-	int32_t shortAxis2Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis2]) - nextGridValues[shortAxis2];
-	if (shortAxis1Diff != 0 && shortAxis2Diff != 0)
+	int32_t middleAxisDiff = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
+	int32_t shortestAxisDiff = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+	if (middleAxisDiff != 0 && shortestAxisDiff != 0)
 	{
-		float t1 = shortAxis1Diff == -1 ?
-			(std::floorf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1]
-			: (std::ceilf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1];
-		float t2 = shortAxis1Diff == -1 ?
-			(std::floorf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2]
-			: (std::ceilf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2];
-		if (t1 < t2)
+		float t1 = middleAxisDiff == -1 ?
+			(std::floorf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis]
+			: (std::ceilf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis];
+		float shortestPosition = oldRay.getOrigin()[shortestAxis] + oldRay.getDirection()[shortestAxis] * t1;
+		int32_t shorterDiff = static_cast<int32_t>(floorf(shortestPosition)) - gridValues[shortestAxis];
+		if (shorterDiff != 0)
 		{
-			nextGridValues[shortAxis1] += shortAxis1Diff;
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			//apply shorter first
+			gridValues[shortestAxis] += shortestAxisDiff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+			//apply longer second
+			gridValues[middleAxis] += middleAxisDiff;
+			colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 			if (colorValue != EMPTY_KEY)
 			{
 				return colorValue;
@@ -94,34 +101,42 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		}
 		else
 		{
-			nextGridValues[shortAxis2] += shortAxis2Diff;
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			//apply longer first
+			gridValues[middleAxis] += middleAxisDiff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
+			if (colorValue != EMPTY_KEY)
+			{
+				return colorValue;
+			}
+			//apply shorter second
+			gridValues[shortestAxis] += shortestAxisDiff;
+			colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 			if (colorValue != EMPTY_KEY)
 			{
 				return colorValue;
 			}
 		}
 	}
-	else if (shortAxis1Diff != 0)
+	else if (middleAxisDiff != 0)
 	{
-		nextGridValues[shortAxis1] += shortAxis1Diff;
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		gridValues[middleAxis] += middleAxisDiff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 		if (colorValue != EMPTY_KEY)
 		{
 			return colorValue;
 		}
 	}
-	else if (shortAxis2Diff != 0)
+	else if (shortestAxisDiff != 0)
 	{
-		nextGridValues[shortAxis2] += shortAxis2Diff;
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		gridValues[shortestAxis] += shortestAxisDiff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 		if (colorValue != EMPTY_KEY)
 		{
 			return colorValue;
 		}
 	}
-	nextGridValues[longestAxis] += longestAxisDiff;
-	uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+	gridValues[longestAxis] += longestAxisDiff;
+	uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 	if (colorValue != EMPTY_KEY)
 	{
 		return colorValue;
@@ -131,20 +146,27 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	{
 		Ray oldRay = ray;
 		ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-		int32_t shortAxis1Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis1]) - nextGridValues[shortAxis1];
-		int32_t shortAxis2Diff = static_cast<int32_t>(ray.getOrigin()[shortAxis2]) - nextGridValues[shortAxis2];
-		if (shortAxis1Diff != 0 && shortAxis2Diff != 0)
+		int32_t middleAxisDiff = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
+		int32_t shortestAxisDiff = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+		if (middleAxisDiff != 0 && shortestAxisDiff != 0)
 		{
-			float t1 = shortAxis1Diff == -1 ?
-				((oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1]
-				: (std::ceilf(oldRay.getOrigin()[shortAxis1]) - oldRay.getOrigin()[shortAxis1]) / oldRay.getDirection()[shortAxis1];
-			float t2 = shortAxis1Diff == -1 ?
-				(std::floorf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2]
-				: (std::ceilf(oldRay.getOrigin()[shortAxis2]) - oldRay.getOrigin()[shortAxis2]) / oldRay.getDirection()[shortAxis2];
-			if (t1 < t2)
+			float t1 = middleAxisDiff == -1 ?
+				(std::floorf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis]
+				: (std::ceilf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis];
+			float shortestPosition = oldRay.getOrigin()[shortestAxis] + oldRay.getDirection()[shortestAxis] * t1;
+			int32_t shorterDiff = static_cast<int32_t>(floorf(shortestPosition)) - gridValues[shortestAxis];
+			if (shorterDiff != 0)
 			{
-				nextGridValues[shortAxis1] += shortAxis1Diff;
-				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+				//apply shorter first
+				gridValues[shortestAxis] += shortestAxisDiff;
+				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
+				if (colorValue != EMPTY_KEY)
+				{
+					return colorValue;
+				}
+				//apply longer second
+				gridValues[middleAxis] += middleAxisDiff;
+				colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 				if (colorValue != EMPTY_KEY)
 				{
 					return colorValue;
@@ -152,34 +174,42 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 			}
 			else
 			{
-				nextGridValues[shortAxis2] += shortAxis2Diff;
-				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+				//apply longer first
+				gridValues[middleAxis] += middleAxisDiff;
+				uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
+				if (colorValue != EMPTY_KEY)
+				{
+					return colorValue;
+				}
+				//apply shorter second
+				gridValues[shortestAxis] += shortestAxisDiff;
+				colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 				if (colorValue != EMPTY_KEY)
 				{
 					return colorValue;
 				}
 			}
 		}
-		else if (shortAxis1Diff != 0)
+		else if (middleAxisDiff != 0)
 		{
-			nextGridValues[shortAxis1] += shortAxis1Diff;
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			gridValues[middleAxis] += middleAxisDiff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 			if (colorValue != EMPTY_KEY)
 			{
 				return colorValue;
 			}
 		}
-		else if (shortAxis2Diff != 0)
+		else if (shortestAxisDiff != 0)
 		{
-			nextGridValues[shortAxis2] += shortAxis2Diff;
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+			gridValues[shortestAxis] += shortestAxisDiff;
+			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 			if (colorValue != EMPTY_KEY)
 			{
 				return colorValue;
 			}
 		}
-		nextGridValues[longestAxis] += longestAxisDiff;
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(nextGridValues[0], nextGridValues[1], nextGridValues[2]));
+		gridValues[longestAxis] += longestAxisDiff;
+		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(generate3DInteger(gridValues[0], gridValues[1], gridValues[2]));
 		if (colorValue != EMPTY_KEY)
 		{
 			return colorValue;
