@@ -9,6 +9,7 @@
 #include "../renderer/camera/Camera.cuh"
 
 #include "../cuckoohash/CuckooHashTable.cuh"
+#include "../voxelclusterstore/VoxelClusterStore.cuh"
 
 #define DEVICE_ID 0
 
@@ -52,7 +53,12 @@ int main()
 	std::unordered_map<uint32_t, uint32_t> voxelMap;
 	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
 	VoxelSphere::generateVoxelSphere(voxelMap, 32, 32, 32, 10);
+	VoxelClusterStore voxelClusterStore = VoxelClusterStore(voxelMap);
 	CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
+
+	uint32_t cl1 = voxelClusterStore.getColorFromVoxel(23, 28, 32);
+	uint32_t cl2 = voxelClusterStore.getColorFromVoxel(40, 27, 32);
+	uint32_t cl3 = voxelClusterStore.getColorFromVoxel(23, 23, 23);
 
 	//Hash table's GPU handle
 	CuckooHashTable* deviceVoxelHashTable;
