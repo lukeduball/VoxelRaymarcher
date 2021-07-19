@@ -14,11 +14,6 @@
 //Start with 1920x1080 HD image
 //Split up the image into 30x30 sections - the GCD is 120 (only 1024 threads allowed per block)
 
-__device__ int generate3DInteger(int x, int y, int z)
-{
-	return (x << 20) | (y << 10) | z;
-}
-
 constexpr float EPSILON = 0.0001f;
 
 __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure)
@@ -93,14 +88,14 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		}
 		//apply shorter first
 		gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]));//voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
 		//apply longer second
 		gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-		colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -109,7 +104,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	else if (axisDiff[middleAxis] != 0)
 	{
 		gridValues[middleAxis] += axisDiff[middleAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -118,14 +113,14 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	else if (axisDiff[shortestAxis] != 0)
 	{
 		gridValues[shortestAxis] += axisDiff[shortestAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
 	}
 	gridValues[longestAxis] += axisDiff[longestAxis];
-	uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+	uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 	if (colorValue != EMPTY_VAL)
 	{
 		return colorValue;
@@ -155,14 +150,14 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 			}
 			//apply shorter first
 			gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 			if (colorValue != EMPTY_VAL)
 			{
 				return colorValue;
 			}
 			//apply longer second
 			gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-			colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+			colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 			if (colorValue != EMPTY_VAL)
 			{
 				return colorValue;
@@ -171,7 +166,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		else if (axisDiff[middleAxis] != 0)
 		{
 			gridValues[middleAxis] += axisDiff[middleAxis];
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 			if (colorValue != EMPTY_VAL)
 			{
 				return colorValue;
@@ -180,14 +175,14 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		else if (axisDiff[shortestAxis] != 0)
 		{
 			gridValues[shortestAxis] += axisDiff[shortestAxis];
-			uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 			if (colorValue != EMPTY_VAL)
 			{
 				return colorValue;
 			}
 		}
 		gridValues[longestAxis] += axisDiff[longestAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -214,14 +209,14 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		}
 		//apply shorter first
 		gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
 		//apply longer second
 		gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-		colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -230,7 +225,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	else if (nextMidAxis < 63 && axisDiff[middleAxis] != 0)
 	{
 		gridValues[middleAxis] += axisDiff[middleAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -239,7 +234,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	else if (nextShortAxis < 63 && axisDiff[shortestAxis] != 0)
 	{
 		gridValues[shortestAxis] += axisDiff[shortestAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
@@ -250,7 +245,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	if (nextLongAxis < 63)
 	{
 		gridValues[longestAxis] += axisDiff[longestAxis];
-		uint32_t colorValue = voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2])); //voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
