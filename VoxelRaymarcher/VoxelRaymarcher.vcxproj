@@ -16,6 +16,7 @@
   <ItemGroup>
     <ClInclude Include="src\cuckoohash\CuckooHashTable.cuh" />
     <ClInclude Include="src\geometry\VoxelCube.h" />
+    <ClInclude Include="src\geometry\VoxelFunctions.cuh" />
     <ClInclude Include="src\geometry\VoxelFunctions.h" />
     <ClInclude Include="src\geometry\VoxelSphere.h" />
     <ClInclude Include="src\math\MathConstants.cuh" />

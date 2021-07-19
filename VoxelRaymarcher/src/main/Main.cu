@@ -56,9 +56,11 @@ int main()
 	VoxelClusterStore voxelClusterStore = VoxelClusterStore(voxelMap);
 	CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
 
-	uint32_t cl1 = voxelClusterStore.getColorFromVoxel(23, 28, 32);
-	uint32_t cl2 = voxelClusterStore.getColorFromVoxel(40, 27, 32);
-	uint32_t cl3 = voxelClusterStore.getColorFromVoxel(23, 23, 23);
+	//Voxel Cluster Store's GPU handle
+	VoxelClusterStore* deviceVoxelClusterStore;
+	//Move the voxel cluster store to the GPU
+	cudaMalloc(&deviceVoxelClusterStore, sizeof(VoxelClusterStore));
+	cudaMemcpy(deviceVoxelClusterStore, &voxelClusterStore, sizeof(VoxelClusterStore), cudaMemcpyHostToDevice);
 
 	//Hash table's GPU handle
 	CuckooHashTable* deviceVoxelHashTable;
@@ -66,7 +68,7 @@ int main()
 	cudaMalloc(&deviceVoxelHashTable, sizeof(CuckooHashTable));
 	cudaMemcpy(deviceVoxelHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
 
-	VoxelStructure voxelStructure = VoxelStructure(deviceVoxelHashTable, Vector3(-32.0f, -32.0f, -64.0f), 64);
+	VoxelStructure voxelStructure = VoxelStructure(deviceVoxelClusterStore, Vector3(-32.0f, -32.0f, -64.0f), 64);
 
 	//Copy the voxel structure to the GPU
 	VoxelStructure* deviceVoxelStructure;
