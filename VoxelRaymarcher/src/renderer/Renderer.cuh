@@ -50,34 +50,12 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 	return 0;
 }
 
-__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure)
+__forceinline__ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimalToIntFunc)(float), const VoxelStructure* voxelStructure, int32_t* axisDiff, int32_t* gridValues, 
+	uint32_t shortestAxis, uint32_t middleAxis, uint32_t longestAxis, bool shortCheck, bool middleCheck, bool longestCheck)
 {
-	//Ray needs to be aligned to grid first in the longest direction -- then the loop can occur
-	//Both -1.0f and 1.0f can be represented correctly so when orginally snapping to the grid an epsilon needs to be employed and will keep things the correct way
-
-	uint32_t longestAxis;
-	uint32_t middleAxis;
-	uint32_t shortestAxis;
-
-	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, middleAxis, shortestAxis);
-	Ray ray = oldRay;
-
-	int32_t gridValues[3] = { static_cast<int32_t>(floorf(ray.getOrigin().getX())), static_cast<int32_t>(floorf(ray.getOrigin().getY())), static_cast<int32_t>(floorf(ray.getOrigin().getZ())) };
-	int32_t axisDiff[3] = { 0, 0, 0 };
-	axisDiff[longestAxis] = ray.getDirection()[longestAxis] < 0.0f ? -1 : 1;
-
-	//Snap the longest direction vector axis to the grid first
-	float t = ray.getDirection()[longestAxis] > 0.0f ?
-		(gridValues[longestAxis] + EPSILON + 1 - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis] :
-		(gridValues[longestAxis] - EPSILON - ray.getOrigin()[longestAxis]) / ray.getDirection()[longestAxis];
-	ray = Ray(ray.getOrigin() + ray.getDirection() * t, ray.getDirection());
-	axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
-	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
-	if (axisDiff[middleAxis] != 0 && axisDiff[shortestAxis] != 0)
+	if (shortCheck && middleCheck && axisDiff[middleAxis] != 0 && axisDiff[shortestAxis] != 0)
 	{
-		float t1 = axisDiff[middleAxis] == -1 ?
-			(std::floorf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis]
-			: (std::ceilf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis];
+		float t1 = (*decimalToIntFunc)(((oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis]);
 		float shortestPosition = oldRay.getOrigin()[shortestAxis] + oldRay.getDirection()[shortestAxis] * t1;
 		int32_t shorterDiff = static_cast<int32_t>(floorf(shortestPosition)) - gridValues[shortestAxis];
 		uint32_t applyOrder[2] = { middleAxis, shortestAxis };
@@ -101,7 +79,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 			return colorValue;
 		}
 	}
-	else if (axisDiff[middleAxis] != 0)
+	else if (middleCheck && axisDiff[middleAxis] != 0)
 	{
 		gridValues[middleAxis] += axisDiff[middleAxis];
 		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
@@ -110,7 +88,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 			return colorValue;
 		}
 	}
-	else if (axisDiff[shortestAxis] != 0)
+	else if (shortCheck && axisDiff[shortestAxis] != 0)
 	{
 		gridValues[shortestAxis] += axisDiff[shortestAxis];
 		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
@@ -119,139 +97,81 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 			return colorValue;
 		}
 	}
-	gridValues[longestAxis] += axisDiff[longestAxis];
-	uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+
+	if (longestCheck)
+	{
+		gridValues[longestAxis] += axisDiff[longestAxis];
+		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		if (colorValue != EMPTY_VAL)
+		{
+			return colorValue;
+		}
+	}
+
+	return EMPTY_VAL;
+}
+
+__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure)
+{
+	//Both -1.0f and 1.0f can be represented correctly so when orginally snapping to the grid an epsilon needs to be employed and will keep things the correct way
+	uint32_t longestAxis;
+	uint32_t middleAxis;
+	uint32_t shortestAxis;
+	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, middleAxis, shortestAxis);
+
+	int32_t gridValues[3] = { static_cast<int32_t>(floorf(oldRay.getOrigin().getX())), static_cast<int32_t>(floorf(oldRay.getOrigin().getY())), static_cast<int32_t>(floorf(oldRay.getOrigin().getZ())) };
+	int32_t axisDiff[3] = { 0, 0, 0 };
+	axisDiff[longestAxis] = oldRay.getDirection()[longestAxis] < 0.0f ? -1 : 1;
+
+	//Snap the longest direction vector axis to the grid first
+	float t = oldRay.getDirection()[longestAxis] > 0.0f ?
+		(gridValues[longestAxis] + EPSILON + 1 - oldRay.getOrigin()[longestAxis]) / oldRay.getDirection()[longestAxis] :
+		(gridValues[longestAxis] - EPSILON - oldRay.getOrigin()[longestAxis]) / oldRay.getDirection()[longestAxis];
+	Ray ray = Ray(oldRay.getOrigin() + oldRay.getDirection() * t, oldRay.getDirection());
+	//Calculate the other axis (besides the longest axis) voxel coordinate differences
+	axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
+	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+	//Check if the ray's middle axis is moving in the positive or negative direction to assign the correct conversion function
+	float (*decimalToIntFunc)(float) = ray.getDirection()[middleAxis] < 0.0f ? &std::floorf : &std::ceilf;
+	
+	//Perform a check on all voxels in the axis jump to check if any voxels were intersected
+	uint32_t colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
 	if (colorValue != EMPTY_VAL)
 	{
 		return colorValue;
 	}
-
-	Ray nextRay = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-	while (voxelStructure->isRayInStructure(nextRay))
+	
+	//Loop until the next ray location is outside of the voxel grid
+	while (voxelStructure->isRayInStructure(Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection())))
 	{
 		Ray oldRay = ray;
 		ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-		nextRay = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
 		axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
 		axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
-		if (axisDiff[middleAxis] != 0 && axisDiff[shortestAxis] != 0)
-		{
-			//TODO The direction can be determined outisde of the loop in order to get rid of the conditional statement inside
-			float t1 = axisDiff[middleAxis] == -1 ?
-				(std::floorf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis]
-				: (std::ceilf(oldRay.getOrigin()[middleAxis]) - oldRay.getOrigin()[middleAxis]) / oldRay.getDirection()[middleAxis];
-			float shortestPosition = oldRay.getOrigin()[shortestAxis] + oldRay.getDirection()[shortestAxis] * t1;
-			int32_t shorterDiff = static_cast<int32_t>(floorf(shortestPosition)) - gridValues[shortestAxis];
-			uint32_t applyOrder[2] = { middleAxis, shortestAxis };
-			if (shorterDiff != 0)
-			{
-				applyOrder[0] = shortestAxis;
-				applyOrder[1] = middleAxis;
-			}
-			//apply shorter first
-			gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-			if (colorValue != EMPTY_VAL)
-			{
-				return colorValue;
-			}
-			//apply longer second
-			gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-			colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-			if (colorValue != EMPTY_VAL)
-			{
-				return colorValue;
-			}
-		}
-		else if (axisDiff[middleAxis] != 0)
-		{
-			gridValues[middleAxis] += axisDiff[middleAxis];
-			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-			if (colorValue != EMPTY_VAL)
-			{
-				return colorValue;
-			}
-		}
-		else if (axisDiff[shortestAxis] != 0)
-		{
-			gridValues[shortestAxis] += axisDiff[shortestAxis];
-			uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-			if (colorValue != EMPTY_VAL)
-			{
-				return colorValue;
-			}
-		}
-		gridValues[longestAxis] += axisDiff[longestAxis];
-		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
+		colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
 		if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
 	}
 
-	//TODO -- Needs to be checked on axis boundaries in the future
-	axisDiff[middleAxis] = static_cast<int32_t>(floorf(nextRay.getOrigin()[middleAxis])) - gridValues[middleAxis];
-	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(nextRay.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+	//TODO -- Needs a functional test to be checked on axis boundaries in the future
+	//Check if anymore voxels need to be checked while applying a restiction that the voxel must be inside the grid boundaries
+	oldRay = ray;
+	ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
+	axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
+	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
 	uint32_t nextMidAxis = gridValues[middleAxis] + axisDiff[middleAxis];
 	uint32_t nextShortAxis = gridValues[shortestAxis] + axisDiff[shortestAxis];
-	if (nextMidAxis < 63 && nextShortAxis < 63 && axisDiff[middleAxis] != 0 && axisDiff[shortestAxis] != 0)
-	{
-		float t1 = axisDiff[middleAxis] == -1 ?
-			(std::floorf(ray.getOrigin()[middleAxis]) - ray.getOrigin()[middleAxis]) / ray.getDirection()[middleAxis]
-			: (std::ceilf(ray.getOrigin()[middleAxis]) - ray.getOrigin()[middleAxis]) / ray.getDirection()[middleAxis];
-		float shortestPosition = ray.getOrigin()[shortestAxis] + ray.getDirection()[shortestAxis] * t1;
-		int32_t shorterDiff = static_cast<int32_t>(floorf(shortestPosition)) - gridValues[shortestAxis];
-		uint32_t applyOrder[2] = { middleAxis, shortestAxis };
-		if (shorterDiff != 0)
-		{
-			applyOrder[0] = shortestAxis;
-			applyOrder[1] = middleAxis;
-		}
-		//apply shorter first
-		gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-		if (colorValue != EMPTY_VAL)
-		{
-			return colorValue;
-		}
-		//apply longer second
-		gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-		colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-		if (colorValue != EMPTY_VAL)
-		{
-			return colorValue;
-		}
-	}
-	else if (nextMidAxis < 63 && axisDiff[middleAxis] != 0)
-	{
-		gridValues[middleAxis] += axisDiff[middleAxis];
-		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-		if (colorValue != EMPTY_VAL)
-		{
-			return colorValue;
-		}
-	}
-	else if (nextShortAxis < 63 && axisDiff[shortestAxis] != 0)
-	{
-		gridValues[shortestAxis] += axisDiff[shortestAxis];
-		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-		if (colorValue != EMPTY_VAL)
-		{
-			return colorValue;
-		}
-	}
-	
 	uint32_t nextLongAxis = gridValues[longestAxis] + axisDiff[longestAxis];
-	if (nextLongAxis < 63)
+	colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, 
+		nextShortAxis < 63, nextMidAxis < 63, nextLongAxis < 63);
+	if (colorValue != EMPTY_VAL)
 	{
-		gridValues[longestAxis] += axisDiff[longestAxis];
-		uint32_t colorValue = voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-		if (colorValue != EMPTY_VAL)
-		{
-			return colorValue;
-		}
+		return colorValue;
 	}
 	
+	//Return a background color of black if no voxel is hit by the ray
 	return 0;
 }
 

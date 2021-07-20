@@ -1,7 +1,7 @@
 ﻿#include <cuda_runtime.h>
 
-#include "../geometry/VoxelCube.h"
-#include "../geometry/VoxelSphere.h"
+#include "../geometry/VoxelCube.cuh"
+#include "../geometry/VoxelSphere.cuh"
 
 #include "../renderer/Renderer.cuh"
 #include "../renderer/VoxelStructure.cuh"
