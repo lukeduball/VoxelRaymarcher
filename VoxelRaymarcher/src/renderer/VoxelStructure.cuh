@@ -7,6 +7,11 @@
 class VoxelStructure
 {
 public:
+	VoxelStructure() : translationVector(Vector3()), size(0), scale(1), voxelClusterStore(nullptr), hashTable(nullptr)
+	{
+
+	}
+
 	VoxelStructure(CuckooHashTable* table, Vector3 location, uint32_t s, uint32_t scale = 1) : 
 		hashTable(table), voxelClusterStore(nullptr), translationVector(location), size(s), scale(scale) {}
 
