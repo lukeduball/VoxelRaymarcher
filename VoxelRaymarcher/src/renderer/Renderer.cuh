@@ -27,14 +27,27 @@ __device__ uint32_t lookupVoxelClusterStorageVoxel(int32_t* gridValues, Ray& ray
 __device__ uint32_t lookupCuckooHashTableVoxel(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure);
 __constant__ __device__ VoxelLookupFunction voxelLookupFuncs[] = { lookupVoxelClusterStorageVoxel, lookupCuckooHashTableVoxel };
 
+__device__ float applyCeilAndPosEpsilon(float input)
+{
+	return ceilf(input) + EPSILON;
+}
+
+__device__ float applyFloorAndNegEpsilon(float input)
+{
+	return floorf(input) - EPSILON;
+}
+
 __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction voxelLookupFunc)
 {
 	Ray ray = originalRay;
+	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
+	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
+	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	while (voxelStructure->isRayInStructure(ray))
 	{
-		float nextX = ray.getDirection().getX() > 0.0f ? ceilf(ray.getOrigin().getX()) + EPSILON : floorf(ray.getOrigin().getX()) - EPSILON;
-		float nextY = ray.getDirection().getY() > 0.0f ? ceilf(ray.getOrigin().getY()) + EPSILON : floorf(ray.getOrigin().getY()) - EPSILON;
-		float nextZ = ray.getDirection().getZ() > 0.0f ? ceilf(ray.getOrigin().getZ()) + EPSILON : floorf(ray.getOrigin().getZ()) - EPSILON;
+		float nextX = nextXFunc(ray.getOrigin().getX());
+		float nextY = nextYFunc(ray.getOrigin().getY());
+		float nextZ = nextZFunc(ray.getOrigin().getZ());
 		//Calculate the t-values along the ray
 		float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
 		float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
@@ -144,7 +157,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	uint32_t shortestAxis;
 	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, middleAxis, shortestAxis);
 
-	int32_t gridValues[3] = { static_cast<int32_t>(floorf(oldRay.getOrigin().getX())), static_cast<int32_t>(floorf(oldRay.getOrigin().getY())), static_cast<int32_t>(floorf(oldRay.getOrigin().getZ())) };
+	int32_t gridValues[3] = { static_cast<int32_t>(oldRay.getOrigin().getX()), static_cast<int32_t>(oldRay.getOrigin().getY()), static_cast<int32_t>(oldRay.getOrigin().getZ()) };
 	int32_t axisDiff[3] = { 0, 0, 0 };
 	axisDiff[longestAxis] = oldRay.getDirection()[longestAxis] < 0.0f ? -1 : 1;
 
@@ -154,8 +167,8 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		(gridValues[longestAxis] - EPSILON - oldRay.getOrigin()[longestAxis]) / oldRay.getDirection()[longestAxis];
 	Ray ray = Ray(oldRay.getOrigin() + oldRay.getDirection() * t, oldRay.getDirection());
 	//Calculate the other axis (besides the longest axis) voxel coordinate differences
-	axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
-	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+	axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis]) - gridValues[middleAxis];
+	axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis]) - gridValues[shortestAxis];
 	//Check if the ray's middle axis is moving in the positive or negative direction to assign the correct conversion function
 	float (*decimalToIntFunc)(float) = ray.getDirection()[middleAxis] < 0.0f ? &std::floorf : &std::ceilf;
 	
@@ -171,8 +184,8 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	{
 		Ray oldRay = ray;
 		ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-		axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
-		axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+		axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis]) - gridValues[middleAxis];
+		axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis]) - gridValues[shortestAxis];
 		colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelLookupFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
 		if (colorValue != EMPTY_VAL)
 		{
@@ -184,8 +197,8 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	//Check if anymore voxels need to be checked while applying a restiction that the voxel must be inside the grid boundaries
 	oldRay = ray;
 	ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-	axisDiff[middleAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[middleAxis])) - gridValues[middleAxis];
-	axisDiff[shortestAxis] = static_cast<int32_t>(floorf(ray.getOrigin()[shortestAxis])) - gridValues[shortestAxis];
+	axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis]) - gridValues[middleAxis];
+	axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis]) - gridValues[shortestAxis];
 	uint32_t nextMidAxis = gridValues[middleAxis] + axisDiff[middleAxis];
 	uint32_t nextShortAxis = gridValues[shortestAxis] + axisDiff[shortestAxis];
 	uint32_t nextLongAxis = gridValues[longestAxis] + axisDiff[longestAxis];
