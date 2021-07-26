@@ -5,8 +5,7 @@
 #include <unordered_map>
 
 #include "../geometry/VoxelFunctions.cuh"
-
-__constant__ const uint32_t EMPTY_VAL = 1 << 30;
+#include "../renderer/rays/Ray.cuh"
 
 struct VoxelPair
 {
@@ -91,35 +90,58 @@ public:
 		cudaFree(deviceBlockMemAddress);
 	}
 
-	__device__ uint32_t getColorFromVoxel(uint32_t x, uint32_t y, uint32_t z)
+	__device__ uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const
 	{
-		uint32_t voxelID = voxelfunc::generate3DPoint(x, y, z);
-		short clusterID = getVoxelClusterID(x, y, z);
+		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
 		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
-		if (blockLocation != nullptr)
+		//Keep going though empty blocks until a populated block is found
+		while (blockLocation == nullptr)
 		{
-			//Binary Search
-			uint32_t blockSize = *blockLocation;
-			int32_t low = 0;
-			int32_t high = blockSize-1;
-			while (low <= high)
-			{
-				int32_t mid = low + (high - low) / 2;
-				//Check if the key matches
-				if (blockLocation[mid*2 + 1] == voxelID)
-				{
-					//Return the value pairing
-					return blockLocation[mid*2 + 2];
-				}
+			//Skip to the next block location
+			int32_t nextX = ray.getDirection().getX() > 0.0f ? ((gridValues[0] / 8) + 1) * 8 : (gridValues[0] / 8) * 8 - 1;
+			int32_t nextY = ray.getDirection().getY() > 0.0f ? ((gridValues[1] / 8) + 1) * 8 : (gridValues[1] / 8) * 8 - 1;
+			int32_t nextZ = ray.getDirection().getZ() > 0.0f ? ((gridValues[2] / 8) + 1) * 8 : (gridValues[2] / 8) * 8 - 1;
+			//Calculate the t-values along the ray
+			float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+			float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+			float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+			//Find the minimum t-value
+			float tMin = min(tX, min(tY, tZ));
 
-				if (blockLocation[mid*2 + 1] < voxelID)
-				{
-					low = mid + 1;
-				}
-				else
-				{
-					high = mid - 1;
-				}
+			//Create the ray at the next position
+			ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+			gridValues[0] = static_cast<int32_t>(ray.getOrigin().getX());
+			gridValues[1] = static_cast<int32_t>(ray.getOrigin().getY());
+			gridValues[2] = static_cast<int32_t>(ray.getOrigin().getZ());
+			if (static_cast<uint32_t>(gridValues[0]) > 63 || static_cast<uint32_t>(gridValues[1]) > 63 || static_cast<uint32_t>(gridValues[2]) > 63)
+				return FINISH_VAL;
+			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+			blockLocation = deviceBlockMemAddress[clusterID];
+		}
+
+		//Binary Search
+		uint32_t blockSize = *blockLocation;
+		int32_t low = 0;
+		int32_t high = blockSize-1;
+		while (low <= high)
+		{
+			int32_t mid = low + (high - low) / 2;
+			//Check if the key matches
+			if (blockLocation[mid*2 + 1] == voxelID)
+			{
+				//Return the value pairing
+				return blockLocation[mid*2 + 2];
+			}
+
+			if (blockLocation[mid*2 + 1] < voxelID)
+			{
+				low = mid + 1;
+			}
+			else
+			{
+				high = mid - 1;
 			}
 		}
 		return EMPTY_VAL;

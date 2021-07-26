@@ -8,21 +8,12 @@
 #include "../renderer/images/ImageWriter.h"
 #include "../renderer/camera/Camera.cuh"
 
-#include "../cuckoohash/CuckooHashTable.cuh"
-#include "../voxelclusterstore/VoxelClusterStore.cuh"
+#include "../storage/CuckooHashTable.cuh"
+#include "../storage/VoxelClusterStore.cuh"
 
 #include <string>
 
 #define DEVICE_ID 0
-
-__global__ void testLookupFunc(uint32_t* lookupValues, uint32_t numLookupKeys, CuckooHashTable* hashTable)
-{
-	for (uint32_t i = threadIdx.x; i < numLookupKeys; i += blockDim.x)
-	{
-		uint32_t result = hashTable->lookupValueForKey(lookupValues[i]);
-		printf("Index:%d Key:%d -> Value:%d\n", i, lookupValues[i], result);
-	}
-}
 
 int main(int argc, char* argv[])
 {
@@ -85,10 +76,8 @@ int main(int argc, char* argv[])
 	VoxelSphere::generateVoxelSphere(voxelMap, 32, 32, 32, 10);
 
 	//Create the GPU handles for both storage types
-	CuckooHashTable* deviceVoxelHashTable = nullptr;
+	CuckooHashTable* deviceHashTable = nullptr;
 	VoxelClusterStore* deviceVoxelClusterStore = nullptr;
-
-	VoxelStructure voxelStructure;
 
 	//Case for the Voxel Cluster Store being the storage type
 	if (voxelLookupFunctionID == 0)
@@ -99,8 +88,6 @@ int main(int argc, char* argv[])
 		//Move the voxel cluster store to the GPU
 		cudaMalloc(&deviceVoxelClusterStore, sizeof(VoxelClusterStore));
 		cudaMemcpy(deviceVoxelClusterStore, &voxelClusterStore, sizeof(VoxelClusterStore), cudaMemcpyHostToDevice);
-
-		voxelStructure = VoxelStructure(deviceVoxelClusterStore, Vector3(-32.0f, -32.0f, -64.0f), 64);
 	}
 	//Case for the Cuckoo Hash table being the storage type
 	else
@@ -109,12 +96,11 @@ int main(int argc, char* argv[])
 		CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
 
 		//Move the hash table to the GPU
-		cudaMalloc(&deviceVoxelHashTable, sizeof(CuckooHashTable));
-		cudaMemcpy(deviceVoxelHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
-
-		voxelStructure = VoxelStructure(deviceVoxelHashTable, Vector3(-32.0f, -32.0f, -64.0f), 64);
+		cudaMalloc(&deviceHashTable, sizeof(CuckooHashTable));
+		cudaMemcpy(deviceHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
 	}
 	
+	VoxelStructure voxelStructure = VoxelStructure(Vector3(-32.0f, -32.0f, -64.0f), 64);
 
 	//Copy the voxel structure to the GPU
 	VoxelStructure* deviceVoxelStructure;
@@ -124,7 +110,16 @@ int main(int argc, char* argv[])
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
 	dim3 threads(numThreads, numThreads);
-	rayMarchScene <<<blocks, threads>>> (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, rayMarchFunctionID, voxelLookupFunctionID);
+	if (rayMarchFunctionID == 0)
+	{
+		rayMarchSceneJumpAxis<<<blocks, threads>>>(width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+	}
+	else if (rayMarchFunctionID == 1)
+	{
+		rayMarchSceneOriginal<<<blocks, threads>>>(width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+	}
+	cudaError_t err = cudaPeekAtLastError();
+	std::cout << cudaGetErrorString(err) << std::endl;
 
 	cudaDeviceSynchronize();
 
@@ -140,9 +135,9 @@ int main(int argc, char* argv[])
 
 	cudaFree(deviceVoxelStructure);
 
-	if(deviceVoxelHashTable)
-		cudaFree(deviceVoxelHashTable);
-	if (deviceVoxelClusterStore)
+	if(deviceHashTable)
+		cudaFree(deviceHashTable);
+	if(deviceVoxelClusterStore)
 		cudaFree(deviceVoxelClusterStore);
 		
 	return EXIT_SUCCESS;

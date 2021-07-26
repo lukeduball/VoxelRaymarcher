@@ -9,23 +9,12 @@
 #include "camera/Camera.cuh"
 #include "rays/Ray.cuh"
 
-#include "../geometry/VoxelFunctions.cuh"
+#include "../storage/StorageStructure.cuh"
 
-typedef uint32_t(*VoxelLookupFunction)(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure);
-typedef uint32_t(*RaymarchFunction)(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction);
+#include "../geometry/VoxelFunctions.cuh"
 
 //Start with 1920x1080 HD image
 //Split up the image into 30x30 sections - the GCD is 120 (only 1024 threads allowed per block)
-
-constexpr float EPSILON = 0.0001f;
-
-__device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction voxelLookupFunc);
-__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction voxelLookupFunc);
-__constant__ __device__ RaymarchFunction rayMarchFuncs[] = { rayMarchVoxelGridAxisJump, rayMarchVoxelGrid };
-
-__device__ uint32_t lookupVoxelClusterStorageVoxel(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure);
-__device__ uint32_t lookupCuckooHashTableVoxel(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure);
-__constant__ __device__ VoxelLookupFunction voxelLookupFuncs[] = { lookupVoxelClusterStorageVoxel, lookupCuckooHashTableVoxel };
 
 __device__ float applyCeilAndPosEpsilon(float input)
 {
@@ -37,7 +26,7 @@ __device__ float applyFloorAndNegEpsilon(float input)
 	return floorf(input) - EPSILON;
 }
 
-__device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction voxelLookupFunc)
+__device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
 {
 	Ray ray = originalRay;
 	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
@@ -66,8 +55,8 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 		};
 
 		//Check if the voxel is in the map
-		uint32_t voxelColor = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (voxelColor != EMPTY_KEY)
+		uint32_t voxelColor = storageStructure->lookupVoxel(gridValues, ray);
+		if (voxelColor != EMPTY_KEY && voxelColor != FINISH_VAL)
 		{
 			return voxelColor;
 		}
@@ -77,18 +66,8 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 	return 0;
 }
 
-__device__ uint32_t lookupVoxelClusterStorageVoxel(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure)
-{
-	return voxelStructure->voxelClusterStore->getColorFromVoxel(gridValues[0], gridValues[1], gridValues[2]);
-}
-
-__device__ uint32_t lookupCuckooHashTableVoxel(int32_t* gridValues, Ray& ray, const VoxelStructure* voxelStructure)
-{
-	return voxelStructure->hashTable->lookupValueForKey(voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]));
-}
-
-__device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimalToIntFunc)(float), VoxelLookupFunction voxelLookupFunc,
-	const VoxelStructure* voxelStructure, int32_t* axisDiff, int32_t* gridValues, 
+__device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimalToIntFunc)(float),
+	const StorageStructure* storageStructure, int32_t* axisDiff, int32_t* gridValues, 
 	uint32_t shortestAxis, uint32_t middleAxis, uint32_t longestAxis, bool shortCheck, bool middleCheck, bool longestCheck)
 {
 	if (shortCheck && middleCheck && axisDiff[middleAxis] != 0 && axisDiff[shortestAxis] != 0)
@@ -104,15 +83,23 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		//apply shorter first
 		gridValues[applyOrder[0]] += axisDiff[applyOrder[0]];
-		uint32_t colorValue = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (colorValue != EMPTY_VAL)
+		uint32_t colorValue = storageStructure->lookupVoxel(gridValues, ray);
+		if (colorValue == FINISH_VAL)
+		{
+			return FINISH_VAL;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
 		//apply longer second
 		gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
-		colorValue = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (colorValue != EMPTY_VAL)
+		colorValue = storageStructure->lookupVoxel(gridValues, ray);
+		if (colorValue == FINISH_VAL)
+		{
+			return FINISH_VAL;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
@@ -120,8 +107,12 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 	else if (middleCheck && axisDiff[middleAxis] != 0)
 	{
 		gridValues[middleAxis] += axisDiff[middleAxis];
-		uint32_t colorValue = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (colorValue != EMPTY_VAL)
+		uint32_t colorValue = storageStructure->lookupVoxel(gridValues, ray);
+		if (colorValue == FINISH_VAL)
+		{
+			return FINISH_VAL;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
@@ -129,8 +120,12 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 	else if (shortCheck && axisDiff[shortestAxis] != 0)
 	{
 		gridValues[shortestAxis] += axisDiff[shortestAxis];
-		uint32_t colorValue = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (colorValue != EMPTY_VAL)
+		uint32_t colorValue = storageStructure->lookupVoxel(gridValues, ray);
+		if (colorValue == FINISH_VAL)
+		{
+			return FINISH_VAL;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
@@ -139,8 +134,12 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 	if (longestCheck)
 	{
 		gridValues[longestAxis] += axisDiff[longestAxis];
-		uint32_t colorValue = voxelLookupFunc(gridValues, ray, voxelStructure);
-		if (colorValue != EMPTY_VAL)
+		uint32_t colorValue = storageStructure->lookupVoxel(gridValues, ray);
+		if (colorValue == FINISH_VAL)
+		{
+			return FINISH_VAL;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
@@ -149,7 +148,7 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 	return EMPTY_VAL;
 }
 
-__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure, VoxelLookupFunction voxelLookupFunc)
+__device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
 {
 	//Both -1.0f and 1.0f can be represented correctly so when orginally snapping to the grid an epsilon needs to be employed and will keep things the correct way
 	uint32_t longestAxis;
@@ -173,8 +172,12 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	float (*decimalToIntFunc)(float) = ray.getDirection()[middleAxis] < 0.0f ? &std::floorf : &std::ceilf;
 	
 	//Perform a check on all voxels in the axis jump to check if any voxels were intersected
-	uint32_t colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelLookupFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
-	if (colorValue != EMPTY_VAL)
+	uint32_t colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, storageStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
+	if (colorValue == FINISH_VAL)
+	{
+		return 0;
+	}
+	else if (colorValue != EMPTY_VAL)
 	{
 		return colorValue;
 	}
@@ -186,8 +189,12 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 		ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
 		axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis]) - gridValues[middleAxis];
 		axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis]) - gridValues[shortestAxis];
-		colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelLookupFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
-		if (colorValue != EMPTY_VAL)
+		colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, storageStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis, true, true, true);
+		if (colorValue == FINISH_VAL)
+		{
+			return 0;
+		}
+		else if (colorValue != EMPTY_VAL)
 		{
 			return colorValue;
 		}
@@ -202,9 +209,13 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	uint32_t nextMidAxis = gridValues[middleAxis] + axisDiff[middleAxis];
 	uint32_t nextShortAxis = gridValues[shortestAxis] + axisDiff[shortestAxis];
 	uint32_t nextLongAxis = gridValues[longestAxis] + axisDiff[longestAxis];
-	colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, voxelLookupFunc, voxelStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis,
-		nextShortAxis < 63, nextMidAxis < 63, nextLongAxis < 63);
-	if (colorValue != EMPTY_VAL)
+	colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, storageStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis,
+		nextShortAxis < 64, nextMidAxis < 64, nextLongAxis < 64);
+	if (colorValue == FINISH_VAL)
+	{
+		return 0;
+	}
+	else if (colorValue != EMPTY_VAL)
 	{
 		return colorValue;
 	}
@@ -213,13 +224,8 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	return 0;
 }
 
-__global__ void rayMarchScene(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelStructure* voxelStructure, uint8_t* framebuffer, 
-	int32_t rayMarchFunctionID, int32_t voxelLookupFunctionID)
+__forceinline__ __device__ Ray calculateLocalRay(uint32_t xPixel, uint32_t yPixel, uint32_t imgWidth, uint32_t imgHeight, const Camera* camera, const VoxelStructure* voxelStructure)
 {
-	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
-	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
-	if (xPixel >= imgWidth || yPixel >= imgHeight) return;
-
 	//Calculate normalized camera space coordinates (between 0 and 1) of the center of the pixel
 	float uCamera = (xPixel + 0.5f) / static_cast<float>(imgWidth);
 	//Since framebuffer coordinates have posative y going down and 3D position has a positive y going up. The imgHeight needs to be subracted to make up for this difference
@@ -229,14 +235,63 @@ __global__ void rayMarchScene(uint32_t imgWidth, uint32_t imgHeight, Camera* cam
 	Ray ray = camera->generateRay(uCamera, vCamera);
 
 	//Create the local ray which is in the coordinate domain of the voxel structure it will be traversing
-	Ray localRay = ray.convertRayToLocalSpace(voxelStructure->translationVector, voxelStructure->scale);
+	return ray.convertRayToLocalSpace(voxelStructure->translationVector, voxelStructure->scale);
+}
 
-	//Raymarch the voxel grid and get a color back
-	uint32_t color = rayMarchFuncs[rayMarchFunctionID](localRay, voxelStructure, voxelLookupFuncs[voxelLookupFunctionID]);
-	
+__forceinline__ __device__ void writeColorToFramebuffer(uint32_t xPixel, uint32_t yPixel, uint32_t imgWidth, uint32_t color, uint8_t* framebuffer)
+{
 	//Set the framebuffer location for that pixel to the returned color
 	uint32_t pixelIndex = yPixel * imgWidth * 3 + xPixel * 3;
 	framebuffer[pixelIndex] = color >> 16;
 	framebuffer[pixelIndex + 1] = (color >> 8) & 0xFF;
 	framebuffer[pixelIndex + 2] = color & 0xFF;
+}
+
+__forceinline__ __device__ StorageStructure* getStorageStructure(VoxelClusterStore* voxelClusterStorePtr, CuckooHashTable* cuckooHashTablePtr)
+{
+	if (voxelClusterStorePtr != nullptr)
+	{
+		return new VCSStorageStructure(voxelClusterStorePtr);
+	}
+	return new HashTableStorageStructure(cuckooHashTablePtr);
+}
+
+__global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelStructure* voxelStructure, uint8_t* framebuffer, 
+	VoxelClusterStore* voxelClusterStorePtr, CuckooHashTable* cuckooHashTablePtr)
+{
+	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
+	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
+	if (xPixel >= imgWidth || yPixel >= imgHeight) return;
+
+	//Setup the correct storage structure
+	StorageStructure* storageStructure = getStorageStructure(voxelClusterStorePtr, cuckooHashTablePtr);
+
+	Ray localRay = calculateLocalRay(xPixel, yPixel, imgWidth, imgHeight, camera, voxelStructure);
+
+	//Raymarch the voxel grid and get a color back
+	uint32_t color = rayMarchVoxelGrid(localRay, voxelStructure, storageStructure);
+
+	writeColorToFramebuffer(xPixel, yPixel, imgWidth, color, framebuffer);
+
+	delete storageStructure;
+}
+
+__global__ void rayMarchSceneJumpAxis(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelStructure* voxelStructure, uint8_t* framebuffer,
+	VoxelClusterStore* voxelClusterStorePtr, CuckooHashTable* cuckooHashTablePtr)
+{
+	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
+	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
+	if (xPixel >= imgWidth || yPixel >= imgHeight) return;
+
+	//Setup the correct storage structure
+	StorageStructure* storageStructure = getStorageStructure(voxelClusterStorePtr, cuckooHashTablePtr);
+
+	Ray localRay = calculateLocalRay(xPixel, yPixel, imgWidth, imgHeight, camera, voxelStructure);
+
+	//Raymarch the voxel grid and get a color back
+	uint32_t color = rayMarchVoxelGridAxisJump(localRay, voxelStructure, storageStructure);
+
+	writeColorToFramebuffer(xPixel, yPixel, imgWidth, color, framebuffer);
+
+	delete storageStructure;
 }

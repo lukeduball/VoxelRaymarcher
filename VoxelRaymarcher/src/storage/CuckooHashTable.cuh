@@ -1,13 +1,11 @@
 ﻿#pragma once
 
-#include <cuda_runtime.h>
+#include "../geometry/VoxelFunctions.cuh"
 
 #include <algorithm>
 #include <iostream>
 #include <stdint.h>
 #include <unordered_map>
-
-const uint32_t EMPTY_KEY = 1 << 30;
 
 class CuckooHashTable
 {
@@ -78,9 +76,9 @@ public:
 		cudaFree(deviceValue2Bucket);
 	}
 
-	__device__ uint32_t lookupValueForKey(uint32_t key)
+	__device__ uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const
 	{
-		uint32_t code = key;
+		uint32_t code = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 		uint32_t key1 = (hashFunc1(code) % numElements + numElements) % numElements;
 		if (deviceKey1Bucket[key1] == code)
 		{
@@ -279,7 +277,7 @@ private:
 	}
 
 	//Hash function needs to be visible to both the CPU(building hash table) and GPU(lookup functions)
-	__host__ __device__ int hashFunc1(int key)
+	__host__ __device__ int hashFunc1(int key) const
 	{
 		key = (key + 0x7ed55d16) + (key << 12);
 		key = (key ^ 0xc761c23c) ^ (key >> 19);
@@ -291,7 +289,7 @@ private:
 	}
 
 	//Hash function needs to be visible to both the CPU(building hash table) and GPU(lookup functions)
-	__host__ __device__ int hashFunc2(int key)
+	__host__ __device__ int hashFunc2(int key) const
 	{
 		unsigned int c2 = 0x27d4eb2d; // a prime or an odd constant
 		key = (key ^ 61) ^ (key >> 16);

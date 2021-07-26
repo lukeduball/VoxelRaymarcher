@@ -14,7 +14,7 @@
     <CudaCompile Include="src\main\Main.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\cuckoohash\CuckooHashTable.cuh" />
+    <ClInclude Include="src\storage\CuckooHashTable.cuh" />
     <ClInclude Include="src\geometry\VoxelCube.cuh" />
     <ClInclude Include="src\geometry\VoxelFunctions.cuh" />
     <ClInclude Include="src\geometry\VoxelSphere.cuh" />
@@ -27,7 +27,8 @@
     <ClInclude Include="src\renderer\rays\Ray.cuh" />
     <ClInclude Include="src\renderer\Renderer.cuh" />
     <ClInclude Include="src\renderer\VoxelStructure.cuh" />
-    <ClInclude Include="src\voxelclusterstore\VoxelClusterStore.cuh" />
+    <ClInclude Include="src\storage\StorageStructure.cuh" />
+    <ClInclude Include="src\storage\VoxelClusterStore.cuh" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\renderer\images\ImageLoader.cpp" />
@@ -88,6 +89,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\luked\source\repos\lukeduball\VoxelRaymarcher\VoxelRaymarcher\dependencies;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

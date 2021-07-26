@@ -22,7 +22,7 @@ public:
 		verticalVector = 2 * halfHeight * v;
 	}
 
-	__host__ __device__ Ray generateRay(float u, float v) 
+	__host__ __device__ Ray generateRay(float u, float v) const
 	{
 		Vector3 rayOrigin = lowerLeftCorner + u * horizontalVector + v * verticalVector;
 		return Ray(rayOrigin, makeUnitVector(rayOrigin - origin)); 
