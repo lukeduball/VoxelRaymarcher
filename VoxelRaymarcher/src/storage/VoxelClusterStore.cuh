@@ -94,6 +94,7 @@ public:
 	{
 		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+		assert(clusterID >= 0 && clusterID < 512);
 		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
 		//Keep going though empty blocks until a populated block is found
 		while (blockLocation == nullptr)
@@ -118,6 +119,7 @@ public:
 				return FINISH_VAL;
 			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+			assert(clusterID >= 0 && clusterID < 512);
 			blockLocation = deviceBlockMemAddress[clusterID];
 		}
 

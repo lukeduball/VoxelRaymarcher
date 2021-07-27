@@ -29,24 +29,14 @@ __device__ float applyFloorAndNegEpsilon(float input)
 __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
 {
 	Ray ray = originalRay;
+	//Calculate once outside of the loop to increase performance
 	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
+
 	while (voxelStructure->isRayInStructure(ray))
 	{
-		float nextX = nextXFunc(ray.getOrigin().getX());
-		float nextY = nextYFunc(ray.getOrigin().getY());
-		float nextZ = nextZFunc(ray.getOrigin().getZ());
-		//Calculate the t-values along the ray
-		float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-		float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-		float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-		float tMin = min(tX, min(tY, tZ));
-
-		//Create the ray at the next position
-		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
-
+		//Perform the lookup first so that the next ray location can be checked before lookup to avoid accessing memory that should not be in VCS
 		int32_t gridValues[] =
 		{
 			static_cast<int32_t>(ray.getOrigin().getX()),
@@ -60,6 +50,21 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 		{
 			return voxelColor;
 		}
+
+		//Calculate the next voxel location
+
+		float nextX = nextXFunc(ray.getOrigin().getX());
+		float nextY = nextYFunc(ray.getOrigin().getY());
+		float nextZ = nextZFunc(ray.getOrigin().getZ());
+		//Calculate the t-values along the ray
+		float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+		float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+		float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
+		float tMin = min(tX, min(tY, tZ));
+
+		//Create the ray at the next position
+		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
 	}
 
 	//Return the background color of black
