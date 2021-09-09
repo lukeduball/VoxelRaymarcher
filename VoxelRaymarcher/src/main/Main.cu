@@ -4,6 +4,7 @@
 #include "../geometry/VoxelSphere.cuh"
 
 #include "../renderer/Renderer.cuh"
+#include "../renderer/OptimizedFunctions.cuh"
 #include "../renderer/VoxelStructure.cuh"
 #include "../renderer/images/ImageWriter.h"
 #include "../renderer/camera/Camera.cuh"
@@ -19,6 +20,7 @@ int main(int argc, char* argv[])
 {
 	int32_t voxelLookupFunctionID = 0;
 	int32_t rayMarchFunctionID = 0;
+	bool useOptimizedFunctions = false;
 
 	//If there are command line args, setup the commands
 	if (argc == 3)
@@ -33,6 +35,28 @@ int main(int argc, char* argv[])
 			std::cout << "Storage Type: Voxel Cluster Storage" << std::endl;
 		}
 		if (std::strcmp(argv[2], "original") == 0)
+		{
+			rayMarchFunctionID = 1;
+			std::cout << "Raymarch Algorithm: Original" << std::endl;
+		}
+		else
+		{
+			std::cout << "Raymarch Algorithm: Jump Axis" << std::endl;
+		}
+	}
+	else if (argc == 4)
+	{
+		useOptimizedFunctions = true;
+		if (std::strcmp(argv[2], "hashtable") == 0)
+		{
+			voxelLookupFunctionID = 1;
+			std::cout << "Storage Type: Cuckoo Hash Table" << std::endl;
+		}
+		else
+		{
+			std::cout << "Storage Type: Voxel Cluster Store" << std::endl;
+		}
+		if (std::strcmp(argv[3], "original") == 0)
 		{
 			rayMarchFunctionID = 1;
 			std::cout << "Raymarch Algorithm: Original" << std::endl;
@@ -110,13 +134,40 @@ int main(int argc, char* argv[])
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
 	dim3 threads(numThreads, numThreads);
-	if (rayMarchFunctionID == 0)
+
+	if (!useOptimizedFunctions)
 	{
-		rayMarchSceneJumpAxis<<<blocks, threads>>>(width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+		if (rayMarchFunctionID == 0)
+		{
+			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+		}
+		else if (rayMarchFunctionID == 1)
+		{
+			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+		}
 	}
-	else if (rayMarchFunctionID == 1)
+	else
 	{
-		rayMarchSceneOriginal<<<blocks, threads>>>(width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+		//Jump Axis with VCS
+		if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 0)
+		{
+			//rayMarchSceneJumpAxisVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
+		}
+		//Original with VCS
+		else if (rayMarchFunctionID == 1 && voxelLookupFunctionID == 0)
+		{
+			rayMarchSceneOriginalVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
+		}
+		//Jump Axis with Cuckoo Hash Table
+		else if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 1)
+		{
+			rayMarchSceneJumpAxisHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
+		}
+		//Original with Cuckoo Hash Table
+		else
+		{
+			rayMarchSceneOriginalHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
+		}
 	}
 	cudaError_t err = cudaPeekAtLastError();
 	std::cout << cudaGetErrorString(err) << std::endl;

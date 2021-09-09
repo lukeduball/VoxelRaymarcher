@@ -16,12 +16,12 @@
 //Start with 1920x1080 HD image
 //Split up the image into 30x30 sections - the GCD is 120 (only 1024 threads allowed per block)
 
-__device__ float applyCeilAndPosEpsilon(float input)
+__device__ float applyCeilAndPosEpsilon1(float input)
 {
 	return ceilf(input) + EPSILON;
 }
 
-__device__ float applyFloorAndNegEpsilon(float input)
+__device__ float applyFloorAndNegEpsilon1(float input)
 {
 	return floorf(input) - EPSILON;
 }
@@ -30,9 +30,9 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 {
 	Ray ray = originalRay;
 	//Calculate once outside of the loop to increase performance
-	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
-	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
-	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
+	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
+	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
+	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
 
 	while (voxelStructure->isRayInStructure(ray))
 	{

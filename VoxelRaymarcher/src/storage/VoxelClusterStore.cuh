@@ -71,7 +71,7 @@ public:
 			//Copy the rest of the contents into memory
 			memcpy(lastMemoryAddress + 1, blockSets[i].data(), sizeof(VoxelPair) * blockSize);
 			//Increment both the CPU lastMemoryAddress and the GPU location lastDeviceBlockMemoryAddress
-			lastMemoryAddress = lastMemoryAddress + (blockSize*2 + 1);
+			lastMemoryAddress = lastMemoryAddress + (blockSize * 2 + 1);
 			lastDeviceBlockMemoryAddress = lastDeviceBlockMemoryAddress + (blockSize * 2 + 1);
 		}
 
@@ -88,6 +88,65 @@ public:
 	{
 		cudaFree(deviceBlocksMemory);
 		cudaFree(deviceBlockMemAddress);
+	}
+
+	__device__ uint32_t lookupVoxelNoFinishVal(int32_t* gridValues, Ray& ray) const
+	{
+		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+		assert(clusterID >= 0 && clusterID < 512);
+		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
+		//Keep going though empty blocks until a populated block is found
+		while (blockLocation == nullptr)
+		{
+			//Skip to the next block location
+			int32_t nextX = ray.getDirection().getX() > 0.0f ? ((gridValues[0] / 8) + 1) * 8 : (gridValues[0] / 8) * 8 - 1;
+			int32_t nextY = ray.getDirection().getY() > 0.0f ? ((gridValues[1] / 8) + 1) * 8 : (gridValues[1] / 8) * 8 - 1;
+			int32_t nextZ = ray.getDirection().getZ() > 0.0f ? ((gridValues[2] / 8) + 1) * 8 : (gridValues[2] / 8) * 8 - 1;
+			//Calculate the t-values along the ray
+			float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+			float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+			float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+			//Find the minimum t-value
+			float tMin = min(tX, min(tY, tZ));
+
+			//Create the ray at the next position
+			ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+			gridValues[0] = static_cast<int32_t>(ray.getOrigin().getX());
+			gridValues[1] = static_cast<int32_t>(ray.getOrigin().getY());
+			gridValues[2] = static_cast<int32_t>(ray.getOrigin().getZ());
+			if (static_cast<uint32_t>(gridValues[0]) > 63 || static_cast<uint32_t>(gridValues[1]) > 63 || static_cast<uint32_t>(gridValues[2]) > 63)
+				return EMPTY_VAL;
+			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+			assert(clusterID >= 0 && clusterID < 512);
+			blockLocation = deviceBlockMemAddress[clusterID];
+		}
+
+		//Binary Search
+		uint32_t blockSize = *blockLocation;
+		int32_t low = 0;
+		int32_t high = blockSize - 1;
+		while (low <= high)
+		{
+			int32_t mid = low + (high - low) / 2;
+			//Check if the key matches
+			if (blockLocation[mid * 2 + 1] == voxelID)
+			{
+				//Return the value pairing
+				return blockLocation[mid * 2 + 2];
+			}
+
+			if (blockLocation[mid * 2 + 1] < voxelID)
+			{
+				low = mid + 1;
+			}
+			else
+			{
+				high = mid - 1;
+			}
+		}
+		return EMPTY_VAL;
 	}
 
 	__device__ uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const
