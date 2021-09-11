@@ -1,6 +1,7 @@
 ﻿#include <cuda_runtime.h>
 
 #include "../geometry/VoxelCube.cuh"
+#include "../geometry/VoxelFunctions.cuh"
 #include "../geometry/VoxelSphere.cuh"
 
 #include "../renderer/Renderer.cuh"
@@ -97,7 +98,7 @@ int main(int argc, char* argv[])
 
 	std::unordered_map<uint32_t, uint32_t> voxelMap;
 	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
-	VoxelSphere::generateVoxelSphere(voxelMap, 32, 32, 32, 10);
+	VoxelSphere::generateVoxelSphere(voxelMap, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
 
 	//Create the GPU handles for both storage types
 	CuckooHashTable* deviceHashTable = nullptr;
@@ -124,7 +125,7 @@ int main(int argc, char* argv[])
 		cudaMemcpy(deviceHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
 	}
 	
-	VoxelStructure voxelStructure = VoxelStructure(Vector3(-32.0f, -32.0f, -64.0f), 64);
+	VoxelStructure voxelStructure = VoxelStructure(Vector3(-((float)BLOCK_SIZE / 2), -((float)BLOCK_SIZE / 2), -(float)BLOCK_SIZE), BLOCK_SIZE);
 
 	//Copy the voxel structure to the GPU
 	VoxelStructure* deviceVoxelStructure;

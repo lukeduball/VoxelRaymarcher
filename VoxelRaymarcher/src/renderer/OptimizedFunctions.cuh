@@ -183,8 +183,9 @@ __device__ uint32_t rayMarchVoxelGridLongestAxisHashTable(const Ray& originalRay
 	uint32_t shortestAxis;
 	Ray oldRay = originalRay.convertRayToLongestAxisDirection(originalRay, longestAxis, middleAxis, shortestAxis);
 
-	int32_t gridValues[3] = { static_cast<int32_t>(oldRay.getOrigin().getX()), static_cast<int32_t>(oldRay.getOrigin().getY(), static_cast<int32_t>(oldRay.getOrigin().getZ())) };
+	int32_t gridValues[3] = { static_cast<int32_t>(oldRay.getOrigin().getX()), static_cast<int32_t>(oldRay.getOrigin().getY()), static_cast<int32_t>(oldRay.getOrigin().getZ()) };
 	int32_t axisDiff[3] = { 0, 0, 0 };
+	axisDiff[longestAxis] = oldRay.getDirection()[longestAxis] < 0.0f ? -1 : 1;
 
 	//Snap the longest direction vector axis to the grid first
 	float t = oldRay.getDirection()[longestAxis] > 0.0f ?
@@ -221,13 +222,13 @@ __device__ uint32_t rayMarchVoxelGridLongestAxisHashTable(const Ray& originalRay
 	//Check if anymore voxels need to be checked while applying a restriction that the voxel must be inside the grid boundaries
 	oldRay = ray;
 	ray = Ray(ray.getOrigin() + ray.getDirection(), ray.getDirection());
-	axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis] - gridValues[middleAxis]);
-	axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis] - gridValues[shortestAxis]);
+	axisDiff[middleAxis] = static_cast<int32_t>(ray.getOrigin()[middleAxis]) - gridValues[middleAxis];
+	axisDiff[shortestAxis] = static_cast<int32_t>(ray.getOrigin()[shortestAxis]) - gridValues[shortestAxis];
 	uint32_t nextMidAxis = gridValues[middleAxis] + axisDiff[middleAxis];
 	uint32_t nextShortAxis = gridValues[shortestAxis] + axisDiff[shortestAxis];
 	uint32_t nextLongAxis = gridValues[longestAxis] + axisDiff[longestAxis];
 	colorValue = checkRayJumpForVoxelsHashTable(oldRay, ray, decimalToIntFunc, hashTable, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis,
-		nextShortAxis < 63, nextMidAxis < 63, nextLongAxis < 63);
+		nextShortAxis < BLOCK_SIZE, nextMidAxis < BLOCK_SIZE, nextLongAxis < BLOCK_SIZE);
 	if (colorValue != EMPTY_VAL)
 	{
 		return colorValue;

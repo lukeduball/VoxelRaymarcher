@@ -115,7 +115,7 @@ public:
 			gridValues[0] = static_cast<int32_t>(ray.getOrigin().getX());
 			gridValues[1] = static_cast<int32_t>(ray.getOrigin().getY());
 			gridValues[2] = static_cast<int32_t>(ray.getOrigin().getZ());
-			if (static_cast<uint32_t>(gridValues[0]) > 63 || static_cast<uint32_t>(gridValues[1]) > 63 || static_cast<uint32_t>(gridValues[2]) > 63)
+			if (static_cast<uint32_t>(gridValues[0]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1)
 				return EMPTY_VAL;
 			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
@@ -174,7 +174,7 @@ public:
 			gridValues[0] = static_cast<int32_t>(ray.getOrigin().getX());
 			gridValues[1] = static_cast<int32_t>(ray.getOrigin().getY());
 			gridValues[2] = static_cast<int32_t>(ray.getOrigin().getZ());
-			if (static_cast<uint32_t>(gridValues[0]) > 63 || static_cast<uint32_t>(gridValues[1]) > 63 || static_cast<uint32_t>(gridValues[2]) > 63)
+			if (static_cast<uint32_t>(gridValues[0]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1)
 				return FINISH_VAL;
 			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);

@@ -9,6 +9,7 @@ constexpr float EPSILON = 0.0001f;
 __constant__ const uint32_t EMPTY_KEY = 1 << 30;
 __constant__ const uint32_t EMPTY_VAL = 1 << 30;
 __constant__ const uint32_t FINISH_VAL = EMPTY_VAL + 1;
+__constant__ const uint32_t BLOCK_SIZE = 64;
 
 namespace voxelfunc
 {

@@ -215,7 +215,7 @@ __device__ uint32_t rayMarchVoxelGridAxisJump(const Ray& originalRay, const Voxe
 	uint32_t nextShortAxis = gridValues[shortestAxis] + axisDiff[shortestAxis];
 	uint32_t nextLongAxis = gridValues[longestAxis] + axisDiff[longestAxis];
 	colorValue = checkRayJumpForVoxels(oldRay, ray, decimalToIntFunc, storageStructure, axisDiff, gridValues, shortestAxis, middleAxis, longestAxis,
-		nextShortAxis < 64, nextMidAxis < 64, nextLongAxis < 64);
+		nextShortAxis < BLOCK_SIZE, nextMidAxis < BLOCK_SIZE, nextLongAxis < BLOCK_SIZE);
 	if (colorValue == FINISH_VAL)
 	{
 		return 0;
