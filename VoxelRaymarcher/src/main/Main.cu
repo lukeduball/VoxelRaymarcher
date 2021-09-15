@@ -19,7 +19,7 @@
 
 void setupConstantValues()
 {
-	Vector3 hostLightDirection = makeUnitVector(Vector3(-1.0f, -1.0f, 1.0f));
+	Vector3 hostLightDirection = makeUnitVector(Vector3(1.0f, 1.0f, 1.0f));
 	cudaMemcpyToSymbol(LIGHT_DIRECTION, &hostLightDirection, sizeof(Vector3));
 
 	Vector3 hostLightColor = Vector3(1.0f, 1.0f, 1.0f);

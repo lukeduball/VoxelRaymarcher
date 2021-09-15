@@ -26,6 +26,17 @@ __device__ float applyFloorAndNegEpsilon1(float input)
 	return floorf(input) - EPSILON;
 }
 
+__device__ __forceinline__ uint32_t applyDirectionalLightingToColor(uint32_t voxelColor, const Vector3& normal)
+{
+	//Find the dot product of the normal and light direction to get the factor
+	float diff = max(dot(normal, LIGHT_DIRECTION), 0.0f);
+	Vector3 diffuse = diff * LIGHT_COLOR;
+	//Convert the color to a vector to calculate its lighting
+	Vector3 color = voxelfunc::convertRGBIntegerColorToVector(voxelColor);
+	//Convert the color back to its integer representation
+	return voxelfunc::convertRGBVectorToInteger(color * diffuse);
+}
+
 __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
 {
 	Ray ray = originalRay;
@@ -77,13 +88,7 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 			{
 				normal = Vector3(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
 			}
-			//Find the dot product of the normal and light direction to get the factor
-			float diff = max(dot(normal, LIGHT_DIRECTION), 0.0f);
-			Vector3 diffuse = diff * LIGHT_COLOR;
-			//Convert the color to a vector to calculate its lighting
-			Vector3 color = voxelfunc::convertRGBIntegerColorToVector(voxelColor);
-			//Convert the color back to its integer representation
-			return voxelfunc::convertRGBVectorToInteger(color * diffuse);
+			return applyDirectionalLightingToColor(voxelColor, normal);
 		}
 
 		//Calculate the next voxel location
@@ -130,7 +135,9 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		else if (colorValue != EMPTY_VAL)
 		{
-			return colorValue;
+			Vector3 normal = Vector3(0.0f, 0.0f, 0.0f);
+			normal[applyOrder[0]] = std::copysignf(1.0f, -ray.getDirection()[applyOrder[0]]);
+			return applyDirectionalLightingToColor(colorValue, normal);
 		}
 		//apply longer second
 		gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
@@ -141,7 +148,9 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		else if (colorValue != EMPTY_VAL)
 		{
-			return colorValue;
+			Vector3 normal = Vector3(0.0f, 0.0f, 0.0f);
+			normal[applyOrder[1]] = std::copysignf(1.0f, -ray.getDirection()[applyOrder[1]]);
+			return applyDirectionalLightingToColor(colorValue, normal);
 		}
 	}
 	else if (middleCheck && axisDiff[middleAxis] != 0)
@@ -154,7 +163,9 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		else if (colorValue != EMPTY_VAL)
 		{
-			return colorValue;
+			Vector3 normal = Vector3(0.0f, 0.0f, 0.0f);
+			normal[middleAxis] = std::copysignf(1.0f, -ray.getDirection()[middleAxis]);
+			return applyDirectionalLightingToColor(colorValue, normal);
 		}
 	}
 	else if (shortCheck && axisDiff[shortestAxis] != 0)
@@ -167,7 +178,9 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		else if (colorValue != EMPTY_VAL)
 		{
-			return colorValue;
+			Vector3 normal = Vector3(0.0f, 0.0f, 0.0f);
+			normal[shortestAxis] = std::copysignf(1.0f, -ray.getDirection()[shortestAxis]);
+			return applyDirectionalLightingToColor(colorValue, normal);
 		}
 	}
 
@@ -181,7 +194,9 @@ __device__ uint32_t checkRayJumpForVoxels(Ray& oldRay, Ray& ray, float (*decimal
 		}
 		else if (colorValue != EMPTY_VAL)
 		{
-			return colorValue;
+			Vector3 normal = Vector3(0.0f, 0.0f, 0.0f);
+			normal[longestAxis] = std::copysignf(1.0f, -ray.getDirection()[longestAxis]);
+			return applyDirectionalLightingToColor(colorValue, normal);
 		}
 	}
 
