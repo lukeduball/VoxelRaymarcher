@@ -9,7 +9,7 @@
 class Vector3
 {
 public:
-	__host__ __device__ Vector3() : Vector3(0.0f, 0.0f, 0.0f) {}
+	__host__ __device__ Vector3() {}
 	__host__ __device__ Vector3(float x, float y, float z) 
 	{
 		data[0] = x;

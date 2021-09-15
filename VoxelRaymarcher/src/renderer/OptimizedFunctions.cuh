@@ -256,9 +256,9 @@ __forceinline__ __device__ void writeColorToFramebuffer1(uint32_t xPixel, uint32
 {
 	//Set the framebuffer location for that pixel to the returned color
 	uint32_t pixelIndex = yPixel * imgWidth * 3 + xPixel * 3;
-	framebuffer[pixelIndex] = color >> 16;
-	framebuffer[pixelIndex + 1] = (color >> 8) & 0xFF;
-	framebuffer[pixelIndex + 2] = color & 0xFF;
+	framebuffer[pixelIndex] = voxelfunc::getRedComponent(color);
+	framebuffer[pixelIndex + 1] = voxelfunc::getGreenComponent(color);
+	framebuffer[pixelIndex + 2] = voxelfunc::getBlueComponent(color);
 }
 
 __global__ void rayMarchSceneOriginalVCS(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelStructure* voxelStructure, uint8_t* framebuffer,

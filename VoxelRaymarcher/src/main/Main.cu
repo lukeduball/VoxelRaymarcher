@@ -17,6 +17,15 @@
 
 #define DEVICE_ID 0
 
+void setupConstantValues()
+{
+	Vector3 hostLightDirection = makeUnitVector(Vector3(-1.0f, -1.0f, 1.0f));
+	cudaMemcpyToSymbol(LIGHT_DIRECTION, &hostLightDirection, sizeof(Vector3));
+
+	Vector3 hostLightColor = Vector3(1.0f, 1.0f, 1.0f);
+	cudaMemcpyToSymbol(LIGHT_COLOR, &hostLightColor, sizeof(Vector3));
+}
+
 int main(int argc, char* argv[])
 {
 	int32_t voxelLookupFunctionID = 0;
@@ -82,6 +91,8 @@ int main(int argc, char* argv[])
 		cudaGetDeviceProperties(&devProp, DEVICE_ID);
 	}
 	printf("Device: %s\n", devProp.name);
+
+	setupConstantValues();
 
 	uint32_t width = 1920;
 	uint32_t height = 1080;

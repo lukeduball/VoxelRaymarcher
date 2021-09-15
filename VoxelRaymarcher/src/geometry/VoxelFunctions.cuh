@@ -5,11 +5,16 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include "../math/Vector3.cuh"
+
 constexpr float EPSILON = 0.0001f;
 __constant__ const uint32_t EMPTY_KEY = 1 << 30;
 __constant__ const uint32_t EMPTY_VAL = 1 << 30;
 __constant__ const uint32_t FINISH_VAL = EMPTY_VAL + 1;
 __constant__ const uint32_t BLOCK_SIZE = 64;
+
+__constant__ Vector3 LIGHT_DIRECTION;
+__constant__ Vector3 LIGHT_COLOR;
 
 namespace voxelfunc
 {
@@ -24,5 +29,36 @@ namespace voxelfunc
 	{
 		assert(r < 256 && g < 256 && b < 256);
 		return (r << 16) | (g << 8) | b;
+	}
+
+	__host__ __device__ __forceinline__ uint32_t getRedComponent(uint32_t color)
+	{
+		return color >> 16;
+	}
+
+	__host__ __device__ __forceinline__ uint32_t getGreenComponent(uint32_t color)
+	{
+		return (color >> 8) & 0xFF;
+	}
+
+	__host__ __device__ __forceinline__ uint32_t getBlueComponent(uint32_t color)
+	{
+		return color & 0xFF;
+	}
+
+	__host__ __device__ __forceinline__ Vector3 convertRGBIntegerColorToVector(uint32_t color)
+	{
+		float red = getRedComponent(color) / 255.0f;
+		float green = getGreenComponent(color) / 255.0f;
+		float blue = getBlueComponent(color) / 255.0f;
+		return Vector3(red, green, blue);
+	}
+
+	__host__ __device__ __forceinline__ uint32_t convertRGBVectorToInteger(const Vector3& colorVec)
+	{
+		uint32_t r = static_cast<uint32_t>(colorVec.getX() * 255.0f);
+		uint32_t g = static_cast<uint32_t>(colorVec.getY() * 255.0f);
+		uint32_t b = static_cast<uint32_t>(colorVec.getZ() * 255.0f);
+		return generateRGBColor(r, g, b);
 	}
 }

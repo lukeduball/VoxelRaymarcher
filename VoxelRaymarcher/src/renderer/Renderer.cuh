@@ -34,6 +34,21 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
 	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
 
+	//Calculate the next voxel location
+
+	float nextX = nextXFunc(ray.getOrigin().getX());
+	float nextY = nextYFunc(ray.getOrigin().getY());
+	float nextZ = nextZFunc(ray.getOrigin().getZ());
+	//Calculate the t-values along the ray
+	float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+	float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+	float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+	//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
+	float tMin = min(tX, min(tY, tZ));
+
+	//Create the ray at the next position
+	ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+
 	while (voxelStructure->isRayInStructure(ray))
 	{
 		//Perform the lookup first so that the next ray location can be checked before lookup to avoid accessing memory that should not be in VCS
@@ -48,20 +63,40 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 		uint32_t voxelColor = storageStructure->lookupVoxel(gridValues, ray);
 		if (voxelColor != EMPTY_KEY && voxelColor != FINISH_VAL)
 		{
-			return voxelColor;
+			//Find the normal based on which axis is hit
+			Vector3 normal;
+			if (tMin == tX)
+			{
+				normal = Vector3(copysignf(1.0f, -ray.getDirection().getX()), 0.0f, 0.0f);
+			}
+			else if (tMin == tY)
+			{
+				normal = Vector3(0.0f, copysignf(1.0f, -ray.getDirection().getY()), 0.0f);
+			}
+			else
+			{
+				normal = Vector3(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
+			}
+			//Find the dot product of the normal and light direction to get the factor
+			float diff = max(dot(normal, LIGHT_DIRECTION), 0.0f);
+			Vector3 diffuse = diff * LIGHT_COLOR;
+			//Convert the color to a vector to calculate its lighting
+			Vector3 color = voxelfunc::convertRGBIntegerColorToVector(voxelColor);
+			//Convert the color back to its integer representation
+			return voxelfunc::convertRGBVectorToInteger(color * diffuse);
 		}
 
 		//Calculate the next voxel location
 
-		float nextX = nextXFunc(ray.getOrigin().getX());
-		float nextY = nextYFunc(ray.getOrigin().getY());
-		float nextZ = nextZFunc(ray.getOrigin().getZ());
+		nextX = nextXFunc(ray.getOrigin().getX());
+		nextY = nextYFunc(ray.getOrigin().getY());
+		nextZ = nextZFunc(ray.getOrigin().getZ());
 		//Calculate the t-values along the ray
-		float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-		float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-		float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+		tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+		tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+		tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
 		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-		float tMin = min(tX, min(tY, tZ));
+		tMin = min(tX, min(tY, tZ));
 
 		//Create the ray at the next position
 		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
@@ -247,9 +282,9 @@ __forceinline__ __device__ void writeColorToFramebuffer(uint32_t xPixel, uint32_
 {
 	//Set the framebuffer location for that pixel to the returned color
 	uint32_t pixelIndex = yPixel * imgWidth * 3 + xPixel * 3;
-	framebuffer[pixelIndex] = color >> 16;
-	framebuffer[pixelIndex + 1] = (color >> 8) & 0xFF;
-	framebuffer[pixelIndex + 2] = color & 0xFF;
+	framebuffer[pixelIndex] = voxelfunc::getRedComponent(color);
+	framebuffer[pixelIndex + 1] = voxelfunc::getGreenComponent(color);
+	framebuffer[pixelIndex + 2] = voxelfunc::getBlueComponent(color);
 }
 
 __forceinline__ __device__ StorageStructure* getStorageStructure(VoxelClusterStore* voxelClusterStorePtr, CuckooHashTable* cuckooHashTablePtr)
