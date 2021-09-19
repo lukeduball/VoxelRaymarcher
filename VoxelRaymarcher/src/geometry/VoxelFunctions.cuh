@@ -15,6 +15,12 @@ __constant__ const uint32_t BLOCK_SIZE = 64;
 
 __constant__ Vector3 LIGHT_DIRECTION;
 __constant__ Vector3 LIGHT_COLOR;
+__constant__ Vector3 LIGHT_POSITION;
+__constant__ const float LIGHT_CONSTANT = 1.0f;
+__constant__ const float LIGHT_LINEAR = 0.045f;
+__constant__ const float LIGHT_QUADRATIC = 0.0075f;
+
+__constant__ bool USE_POINT_LIGHT = false;
 
 namespace voxelfunc
 {

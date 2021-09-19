@@ -24,6 +24,12 @@ void setupConstantValues()
 
 	Vector3 hostLightColor = Vector3(1.0f, 1.0f, 1.0f);
 	cudaMemcpyToSymbol(LIGHT_COLOR, &hostLightColor, sizeof(Vector3));
+
+	Vector3 hostLightPosition = Vector3(10.0f, 10.0f, -10.0f);
+	cudaMemcpyToSymbol(LIGHT_POSITION, &hostLightPosition, sizeof(Vector3));
+
+	bool hostUsePointLight = true;
+	cudaMemcpyToSymbol(USE_POINT_LIGHT, &hostUsePointLight, sizeof(bool));
 }
 
 int main(int argc, char* argv[])
