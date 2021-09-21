@@ -28,8 +28,11 @@ void setupConstantValues()
 	Vector3 hostLightPosition = Vector3(10.0f, 10.0f, -10.0f);
 	cudaMemcpyToSymbol(LIGHT_POSITION, &hostLightPosition, sizeof(Vector3));
 
-	bool hostUsePointLight = true;
+	bool hostUsePointLight = false;
 	cudaMemcpyToSymbol(USE_POINT_LIGHT, &hostUsePointLight, sizeof(bool));
+
+	bool hostUseShadows = false;
+	cudaMemcpyToSymbol(USE_SHADOWS, &hostUseShadows, sizeof(bool));
 }
 
 int main(int argc, char* argv[])
@@ -116,6 +119,7 @@ int main(int argc, char* argv[])
 	std::unordered_map<uint32_t, uint32_t> voxelMap;
 	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
 	VoxelSphere::generateVoxelSphere(voxelMap, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
+	VoxelSphere::generateVoxelSphere(voxelMap, 45, 45, 45, 2);
 
 	//Create the GPU handles for both storage types
 	CuckooHashTable* deviceHashTable = nullptr;

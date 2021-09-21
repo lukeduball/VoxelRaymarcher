@@ -21,6 +21,7 @@ __constant__ const float LIGHT_LINEAR = 0.045f;
 __constant__ const float LIGHT_QUADRATIC = 0.0075f;
 
 __constant__ bool USE_POINT_LIGHT = false;
+__constant__ bool USE_SHADOWS = false;
 
 namespace voxelfunc
 {

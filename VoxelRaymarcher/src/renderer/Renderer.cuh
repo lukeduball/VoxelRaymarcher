@@ -66,6 +66,71 @@ __device__ __forceinline__ Vector3 getHitLocation(const Vector3& voxelStructureT
 	return hitPoint;
 }
 
+__device__ bool isInShadowOriginalRayMarch(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
+{
+	if (!USE_SHADOWS)
+	{
+		return false;
+	}
+
+	Ray ray = originalRay;
+	//Calculate once outside of the loop to increase performance
+	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
+	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
+	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
+
+	//Calculate the next voxel location
+
+	float nextX = nextXFunc(ray.getOrigin().getX());
+	float nextY = nextYFunc(ray.getOrigin().getY());
+	float nextZ = nextZFunc(ray.getOrigin().getZ());
+	//Calculate the t-values along the ray
+	float tX = ray.getDirection().getX() != 0.0f ? (nextX - ray.getOrigin().getX()) / ray.getDirection().getX() : INFINITY;
+	float tY = ray.getDirection().getY() != 0.0f ? (nextY - ray.getOrigin().getY()) / ray.getDirection().getY() : INFINITY;
+	float tZ = ray.getDirection().getZ() != 0.0f ? (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ() : INFINITY;
+	//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
+	float tMin = min(tX, min(tY, tZ));
+
+	//Create the ray at the next position
+	ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+
+	while (voxelStructure->isRayInStructure(ray))
+	{
+		//Perform the lookup first so that the next ray location can be checked before lookup to avoid accessing memory that should not be in VCS
+		int32_t gridValues[] =
+		{
+			static_cast<int32_t>(ray.getOrigin().getX()),
+			static_cast<int32_t>(ray.getOrigin().getY()),
+			static_cast<int32_t>(ray.getOrigin().getZ())
+		};
+
+		//Check if the voxel is in the map
+		uint32_t voxelColor = storageStructure->lookupVoxel(gridValues, ray);
+		if (voxelColor != EMPTY_KEY && voxelColor != FINISH_VAL)
+		{
+			return true;
+		}
+
+		//Calculate the next voxel location
+
+		nextX = nextXFunc(ray.getOrigin().getX());
+		nextY = nextYFunc(ray.getOrigin().getY());
+		nextZ = nextZFunc(ray.getOrigin().getZ());
+		//Calculate the t-values along the ray
+		tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
+		tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
+		tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
+		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
+		tMin = min(tX, min(tY, tZ));
+
+		//Create the ray at the next position
+		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+	}
+
+	//Return the background color of black
+	return false;
+}
+
 __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructure* voxelStructure, const StorageStructure* storageStructure)
 {
 	Ray ray = originalRay;
@@ -118,12 +183,19 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 				normal = Vector3(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
 			}
 
+			uint32_t resultingColor = 0;
 			if (USE_POINT_LIGHT)
 			{
 				Vector3 hitPoint = getHitLocation(voxelStructure->translationVector, gridValues);
-				return applyPointLightingToColor(voxelColor, hitPoint, normal);
+				resultingColor = applyPointLightingToColor(voxelColor, hitPoint, normal);
 			}
-			return applyDirectionalLightingToColor(voxelColor, normal);
+			else
+			{
+				resultingColor = applyDirectionalLightingToColor(voxelColor, normal);
+			}
+			Vector3 localHitPoint = Vector3(gridValues[0] + 0.5f, gridValues[1] + 0.5f, gridValues[2] + 0.5f);
+			localHitPoint += normal * 0.5f;
+			return resultingColor * !isInShadowOriginalRayMarch(Ray(localHitPoint, LIGHT_DIRECTION), voxelStructure, storageStructure);
 		}
 
 		//Calculate the next voxel location

@@ -28,7 +28,7 @@ public:
 						uint32_t red = 50 + (uint32_t)((x - xMin) * (200 / (xMax - xMin)));
 						uint32_t green = 50 + (uint32_t)((y - xMin) * (200 / (yMax - yMin)));
 						uint32_t blue = 50 + (uint32_t)((z - zMin) * (200 / (xMax - zMin)));
-						voxelTable[voxelfunc::generate3DPoint(x, y, z)] = voxelfunc::generateRGBColor(red, green, blue);
+						voxelTable[voxelfunc::generate3DPoint(x, y, z)] = voxelfunc::generateRGBColor(std::min(red, 255u), std::min(green, 255u), std::min(blue, 255u));
 					}
 				}
 			}
