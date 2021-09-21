@@ -31,7 +31,7 @@ void setupConstantValues()
 	bool hostUsePointLight = false;
 	cudaMemcpyToSymbol(USE_POINT_LIGHT, &hostUsePointLight, sizeof(bool));
 
-	bool hostUseShadows = false;
+	bool hostUseShadows = true;
 	cudaMemcpyToSymbol(USE_SHADOWS, &hostUseShadows, sizeof(bool));
 }
 

@@ -195,7 +195,7 @@ __device__ uint32_t rayMarchVoxelGrid(const Ray& originalRay, const VoxelStructu
 			}
 			Vector3 localHitPoint = Vector3(gridValues[0] + 0.5f, gridValues[1] + 0.5f, gridValues[2] + 0.5f);
 			localHitPoint += normal * 0.5f;
-			return resultingColor * !isInShadowOriginalRayMarch(Ray(localHitPoint, LIGHT_DIRECTION), voxelStructure, storageStructure);
+			return resultingColor * !isInShadowOriginalRayMarch(Ray(ray.getOrigin(), LIGHT_DIRECTION), voxelStructure, storageStructure);
 		}
 
 		//Calculate the next voxel location
