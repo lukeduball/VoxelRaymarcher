@@ -13,15 +13,17 @@ __constant__ const uint32_t EMPTY_VAL = 1 << 30;
 __constant__ const uint32_t FINISH_VAL = EMPTY_VAL + 1;
 __constant__ const uint32_t BLOCK_SIZE = 64;
 
-__constant__ Vector3 LIGHT_DIRECTION;
-__constant__ Vector3 LIGHT_COLOR;
-__constant__ Vector3 LIGHT_POSITION;
+__constant__ Vector3f LIGHT_DIRECTION;
+__constant__ Vector3f LIGHT_COLOR;
+__constant__ Vector3f LIGHT_POSITION;
 __constant__ const float LIGHT_CONSTANT = 1.0f;
 __constant__ const float LIGHT_LINEAR = 0.045f;
 __constant__ const float LIGHT_QUADRATIC = 0.0075f;
 
 __constant__ bool USE_POINT_LIGHT = false;
 __constant__ bool USE_SHADOWS = false;
+
+enum class StorageType {VOXEL_CLUSTER_STORE, HASH_TABLE};
 
 namespace voxelfunc
 {
@@ -53,15 +55,15 @@ namespace voxelfunc
 		return color & 0xFF;
 	}
 
-	__host__ __device__ __forceinline__ Vector3 convertRGBIntegerColorToVector(uint32_t color)
+	__host__ __device__ __forceinline__ Vector3f convertRGBIntegerColorToVector(uint32_t color)
 	{
 		float red = getRedComponent(color) / 255.0f;
 		float green = getGreenComponent(color) / 255.0f;
 		float blue = getBlueComponent(color) / 255.0f;
-		return Vector3(red, green, blue);
+		return Vector3f(red, green, blue);
 	}
 
-	__host__ __device__ __forceinline__ uint32_t convertRGBVectorToInteger(const Vector3& colorVec)
+	__host__ __device__ __forceinline__ uint32_t convertRGBVectorToInteger(const Vector3f& colorVec)
 	{
 		uint32_t r = static_cast<uint32_t>(colorVec.getX() * 255.0f);
 		uint32_t g = static_cast<uint32_t>(colorVec.getY() * 255.0f);

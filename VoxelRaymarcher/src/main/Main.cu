@@ -2,11 +2,11 @@
 
 #include "../geometry/VoxelCube.cuh"
 #include "../geometry/VoxelFunctions.cuh"
+#include "../geometry/VoxelSceneCPU.cuh"
 #include "../geometry/VoxelSphere.cuh"
 
 #include "../renderer/Renderer.cuh"
-#include "../renderer/OptimizedFunctions.cuh"
-#include "../renderer/VoxelStructure.cuh"
+//#include "../renderer/OptimizedFunctions.cuh"
 #include "../renderer/images/ImageWriter.h"
 #include "../renderer/camera/Camera.cuh"
 
@@ -19,14 +19,14 @@
 
 void setupConstantValues()
 {
-	Vector3 hostLightDirection = makeUnitVector(Vector3(1.0f, 1.0f, 1.0f));
-	cudaMemcpyToSymbol(LIGHT_DIRECTION, &hostLightDirection, sizeof(Vector3));
+	Vector3f hostLightDirection = makeUnitVector(Vector3f(-1.0f, 1.0f, 1.0f));
+	cudaMemcpyToSymbol(LIGHT_DIRECTION, &hostLightDirection, sizeof(Vector3f));
 
-	Vector3 hostLightColor = Vector3(1.0f, 1.0f, 1.0f);
-	cudaMemcpyToSymbol(LIGHT_COLOR, &hostLightColor, sizeof(Vector3));
+	Vector3f hostLightColor = Vector3f(1.0f, 1.0f, 1.0f);
+	cudaMemcpyToSymbol(LIGHT_COLOR, &hostLightColor, sizeof(Vector3f));
 
-	Vector3 hostLightPosition = Vector3(10.0f, 10.0f, -10.0f);
-	cudaMemcpyToSymbol(LIGHT_POSITION, &hostLightPosition, sizeof(Vector3));
+	Vector3f hostLightPosition = Vector3f(10.0f, 10.0f, -10.0f);
+	cudaMemcpyToSymbol(LIGHT_POSITION, &hostLightPosition, sizeof(Vector3f));
 
 	bool hostUsePointLight = false;
 	cudaMemcpyToSymbol(USE_POINT_LIGHT, &hostUsePointLight, sizeof(bool));
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
 	uint32_t height = 1080;
 	float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
 
-	Camera camera = Camera(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, -1.0f), Vector3(0.0f, 1.0f, 0.0f), 90.0f, aspectRatio);
+	Camera camera = Camera(Vector3f(0.0f, 0.0f, 0.0f), Vector3f(0.0f, 0.0f, -1.0f), Vector3f(0.0f, 1.0f, 0.0f), 90.0f, aspectRatio);
 	//copy the created camera to the GPU
 	Camera* deviceCamera;
 	cudaMalloc(&deviceCamera, sizeof(Camera));
@@ -116,42 +116,22 @@ int main(int argc, char* argv[])
 	uint8_t* deviceFramebuffer;
 	cudaMalloc(&deviceFramebuffer, sizeof(uint8_t) * width * height * 3);
 
-	std::unordered_map<uint32_t, uint32_t> voxelMap;
-	//VoxelCube::generateVoxelCube(voxelMap, 512, 512, 512, 50);
-	VoxelSphere::generateVoxelSphere(voxelMap, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
-	VoxelSphere::generateVoxelSphere(voxelMap, 45, 45, 45, 2);
+	VoxelSceneCPU voxelScene;
+	VoxelSphere::generateVoxelSphere(voxelScene, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
+	VoxelSphere::generateVoxelSphere(voxelScene, 42, 42, 45, 2);
+	VoxelCube::generateVoxelCube(voxelScene, BLOCK_SIZE, BLOCK_SIZE / 2 + 5, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
 
-	//Create the GPU handles for both storage types
-	CuckooHashTable* deviceHashTable = nullptr;
-	VoxelClusterStore* deviceVoxelClusterStore = nullptr;
+	voxelScene.generateVoxelScene(StorageType(voxelLookupFunctionID));
+	StorageStructure** deviceVoxelScene;
+	cudaMalloc(&deviceVoxelScene, sizeof(StorageStructure*) * voxelScene.getArraySize());
+	generateVoxelScene<<<1, 1>>>(deviceVoxelScene, voxelScene.deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
 
-	//Case for the Voxel Cluster Store being the storage type
-	if (voxelLookupFunctionID == 0)
-	{
-		//Generate the voxel cluster store on the CPU
-		VoxelClusterStore voxelClusterStore = VoxelClusterStore(voxelMap);
-
-		//Move the voxel cluster store to the GPU
-		cudaMalloc(&deviceVoxelClusterStore, sizeof(VoxelClusterStore));
-		cudaMemcpy(deviceVoxelClusterStore, &voxelClusterStore, sizeof(VoxelClusterStore), cudaMemcpyHostToDevice);
-	}
-	//Case for the Cuckoo Hash table being the storage type
-	else
-	{
-		//Generate the cuckoo hash table on the CPU
-		CuckooHashTable voxelHashTable = CuckooHashTable(voxelMap);
-
-		//Move the hash table to the GPU
-		cudaMalloc(&deviceHashTable, sizeof(CuckooHashTable));
-		cudaMemcpy(deviceHashTable, &voxelHashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
-	}
+	cudaDeviceSynchronize();
 	
-	VoxelStructure voxelStructure = VoxelStructure(Vector3(-((float)BLOCK_SIZE / 2), -((float)BLOCK_SIZE / 2), -(float)BLOCK_SIZE), BLOCK_SIZE);
-
-	//Copy the voxel structure to the GPU
-	VoxelStructure* deviceVoxelStructure;
-	cudaMalloc(&deviceVoxelStructure, sizeof(VoxelStructure));
-	cudaMemcpy(deviceVoxelStructure, &voxelStructure, sizeof(VoxelStructure), cudaMemcpyHostToDevice);
+	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(-((float)BLOCK_SIZE / 2), -((float)BLOCK_SIZE / 2), -(float)BLOCK_SIZE));
+	VoxelSceneInfo* deviceVoxelSceneInfo;
+	cudaMalloc(&deviceVoxelSceneInfo, sizeof(VoxelSceneInfo));
+	cudaMemcpy(deviceVoxelSceneInfo, &voxelSceneInfo, sizeof(VoxelSceneInfo), cudaMemcpyHostToDevice);
 
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
@@ -161,15 +141,18 @@ int main(int argc, char* argv[])
 	{
 		if (rayMarchFunctionID == 0)
 		{
-			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelSceneInfo, deviceFramebuffer,
+				deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
 		}
 		else if (rayMarchFunctionID == 1)
 		{
-			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore, deviceHashTable);
+			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelSceneInfo, deviceFramebuffer,
+				deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
 		}
 	}
 	else
 	{
+		std::cout << "Optimized functions are currently disabled" << std::endl;
 		//Jump Axis with VCS
 		if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 0)
 		{
@@ -178,17 +161,17 @@ int main(int argc, char* argv[])
 		//Original with VCS
 		else if (rayMarchFunctionID == 1 && voxelLookupFunctionID == 0)
 		{
-			rayMarchSceneOriginalVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
+			//rayMarchSceneOriginalVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
 		}
 		//Jump Axis with Cuckoo Hash Table
 		else if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 1)
 		{
-			rayMarchSceneJumpAxisHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
+			//rayMarchSceneJumpAxisHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
 		}
 		//Original with Cuckoo Hash Table
 		else
 		{
-			rayMarchSceneOriginalHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
+			//rayMarchSceneOriginalHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
 		}
 	}
 	cudaError_t err = cudaPeekAtLastError();
@@ -202,16 +185,14 @@ int main(int argc, char* argv[])
 	ImageWriter imgWriter = ImageWriter();
 	imgWriter.writeImage("output.png", hostFramebuffer, width, height, 3);
 
+	cudaFree(deviceVoxelScene);
+
 	free(hostFramebuffer);
 	cudaFree(deviceFramebuffer);
 	cudaFree(deviceCamera);
+	cudaFree(deviceVoxelSceneInfo);
 
-	cudaFree(deviceVoxelStructure);
-
-	if(deviceHashTable)
-		cudaFree(deviceHashTable);
-	if(deviceVoxelClusterStore)
-		cudaFree(deviceVoxelClusterStore);
+	voxelScene.cleanupVoxelScene();
 		
 	return EXIT_SUCCESS;
 }

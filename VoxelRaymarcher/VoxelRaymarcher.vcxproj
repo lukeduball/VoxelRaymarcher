@@ -14,6 +14,7 @@
     <CudaCompile Include="src\main\Main.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\geometry\VoxelSceneCPU.cuh" />
     <ClInclude Include="src\renderer\OptimizedFunctions.cuh" />
     <ClInclude Include="src\storage\CuckooHashTable.cuh" />
     <ClInclude Include="src\geometry\VoxelCube.cuh" />
@@ -27,7 +28,7 @@
     <ClInclude Include="src\renderer\images\ImageWriter.h" />
     <ClInclude Include="src\renderer\rays\Ray.cuh" />
     <ClInclude Include="src\renderer\Renderer.cuh" />
-    <ClInclude Include="src\renderer\VoxelStructure.cuh" />
+    <ClInclude Include="src\renderer\VoxelSceneInfo.cuh" />
     <ClInclude Include="src\storage\StorageStructure.cuh" />
     <ClInclude Include="src\storage\VoxelClusterStore.cuh" />
   </ItemGroup>

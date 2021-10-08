@@ -5,12 +5,12 @@
 class Ray
 {
 public:
-	__host__ __device__ Ray(const Vector3& o, const Vector3& dir) : origin(o), direction(dir) {}
+	__host__ __device__ Ray(const Vector3f& o, const Vector3f& dir) : origin(o), direction(dir) {}
 
-	__host__ __device__ inline Vector3 getOrigin() const { return origin; }
-	__host__ __device__ inline Vector3 getDirection() const { return direction; }
+	__host__ __device__ inline Vector3f getOrigin() const { return origin; }
+	__host__ __device__ inline Vector3f getDirection() const { return direction; }
 
-	__host__ __device__ Ray convertRayToLocalSpace(Vector3 translation, uint32_t scale) const
+	__host__ __device__ Ray convertRayToLocalSpace(Vector3f translation, uint32_t scale) const
 	{
 		return Ray(origin - (translation * static_cast<float>(scale)), direction);
 	}
@@ -71,6 +71,6 @@ public:
 
 
 private:
-	Vector3 origin;
-	Vector3 direction;
+	Vector3f origin;
+	Vector3f direction;
 };

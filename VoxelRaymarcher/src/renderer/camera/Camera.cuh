@@ -8,14 +8,14 @@
 class Camera
 {
 public:
-	Camera(Vector3 o, Vector3 lookAt, Vector3 globalUp, float fieldOfView, float aspectRatio)
+	__host__ __device__ Camera(Vector3f o, Vector3f lookAt, Vector3f globalUp, float fieldOfView, float aspectRatio)
 	{
 		float halfHeight = tanf((fieldOfView * PI / 180.f) / 2.0f);
 		float halfWidth = halfHeight * aspectRatio;
 		origin = o;
-		Vector3 w = makeUnitVector(lookAt - origin);
-		Vector3 u = makeUnitVector(cross(w, globalUp));
-		Vector3 v = cross(u, w);
+		Vector3f w = makeUnitVector(lookAt - origin);
+		Vector3f u = makeUnitVector(cross(w, globalUp));
+		Vector3f v = cross(u, w);
 		lowerLeftCorner = origin - halfWidth * u - halfHeight * v + w;
 		forwardVector = w;
 		horizontalVector = 2 * halfWidth * u;
@@ -24,14 +24,14 @@ public:
 
 	__host__ __device__ Ray generateRay(float u, float v) const
 	{
-		Vector3 rayOrigin = lowerLeftCorner + u * horizontalVector + v * verticalVector;
+		Vector3f rayOrigin = lowerLeftCorner + u * horizontalVector + v * verticalVector;
 		return Ray(rayOrigin, makeUnitVector(rayOrigin - origin)); 
 	}
 
-	Vector3 origin;
-	Vector3 lowerLeftCorner;
+	Vector3f origin;
+	Vector3f lowerLeftCorner;
 	//Vectors are in camera space
-	Vector3 horizontalVector;
-	Vector3 verticalVector;
-	Vector3 forwardVector;
+	Vector3f horizontalVector;
+	Vector3f verticalVector;
+	Vector3f forwardVector;
 };

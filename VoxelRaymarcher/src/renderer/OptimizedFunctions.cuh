@@ -2,7 +2,6 @@
 
 #include <cuda_runtime.h>
 
-#include "VoxelStructure.cuh"
 #include "camera/Camera.cuh"
 #include "rays/Ray.cuh"
 
