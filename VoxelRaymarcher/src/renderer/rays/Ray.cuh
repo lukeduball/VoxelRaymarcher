@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "../../math/Vector2.cuh"
 #include "../../math/Vector3.cuh"
 
 class Ray
@@ -73,4 +74,17 @@ public:
 private:
 	Vector3f origin;
 	Vector3f direction;
+};
+
+class Ray2D
+{
+public:
+	__host__ __device__ Ray2D(const Vector2f& o, const Vector2f& d) : origin(o), direction(d) {}
+
+	__host__ __device__ inline Vector2f getOrigin() const { return origin; }
+	__host__ __device__ inline Vector2f getDirection() const { return direction; }
+
+private:
+	Vector2f origin;
+	Vector2f direction;
 };

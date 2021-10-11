@@ -90,6 +90,33 @@ public:
 		cudaFree(deviceBlockMemAddress);
 	}
 
+	__device__ uint32_t performBinarySearch(uint32_t* blockLocation, uint32_t voxelID) const
+	{
+		uint32_t blockSize = *blockLocation;
+		int32_t low = 0;
+		int32_t high = blockSize - 1;
+		while (low <= high)
+		{
+			int32_t mid = low + (high - low) / 2;
+			//Check if the key matches
+			if (blockLocation[mid * 2 + 1] == voxelID)
+			{
+				//Return the value pairing
+				return blockLocation[mid * 2 + 2];
+			}
+
+			if (blockLocation[mid * 2 + 1] < voxelID)
+			{
+				low = mid + 1;
+			}
+			else
+			{
+				high = mid - 1;
+			}
+		}
+		return EMPTY_VAL;
+	}
+
 	__device__ uint32_t lookupVoxelNoFinishVal(int32_t* gridValues, Ray& ray) const
 	{
 		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
@@ -123,30 +150,80 @@ public:
 			blockLocation = deviceBlockMemAddress[clusterID];
 		}
 
-		//Binary Search
-		uint32_t blockSize = *blockLocation;
-		int32_t low = 0;
-		int32_t high = blockSize - 1;
-		while (low <= high)
-		{
-			int32_t mid = low + (high - low) / 2;
-			//Check if the key matches
-			if (blockLocation[mid * 2 + 1] == voxelID)
-			{
-				//Return the value pairing
-				return blockLocation[mid * 2 + 2];
-			}
+		return performBinarySearch(blockLocation, voxelID);
+	}
 
-			if (blockLocation[mid * 2 + 1] < voxelID)
+	__device__ uint32_t lookupVoxelLongestAxis(int32_t* gridValues, Ray2D& ray, int32_t longestAxisDiff, uint32_t shorestAxis, uint32_t middleAxis, uint32_t longestAxis)
+	{
+		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+		assert(clusterID >= 0 && clusterID < 512);
+		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
+		//Keep traversing empty blocks until a populated block is found
+		while (blockLocation == nullptr)
+		{
+			//Calculate the next block locations for each axis
+			int32_t nextShortest = ray.getDirection().getY() > 0.0f ? ((gridValues[shorestAxis] / 8) + 1) * 8 : (gridValues[shorestAxis] / 8) * 8 - 1;
+			int32_t nextMiddle = ray.getDirection().getX() > 0.0f ? ((gridValues[middleAxis] / 8) + 1) * 8 : (gridValues[middleAxis] / 8) * 8 - 1;
+			int32_t nextLongest = longestAxisDiff > 0 ? ((gridValues[longestAxis] / 8) + 1) * 8 : (gridValues[longestAxis] / 8) * 8 - 1;
+			//Calculate the t-values for the shortest and middle axes
+			float tShortest = (nextShortest - ray.getOrigin().getY()) / ray.getDirection().getY();
+			float tMiddle = (nextMiddle - ray.getOrigin().getX()) / ray.getDirection().getX();
+			//Find the minumum t-value
+			float tMin = min(tShortest, tMiddle);
+			int32_t longestAxisJump = nextLongest - gridValues[longestAxis];
+			float tLongest = longestAxisJump / longestAxisDiff;
+			if (tMin < tLongest)
 			{
-				low = mid + 1;
+				Ray2D tempRay = Ray2D(ray.getOrigin() + tMin * ray.getDirection(), ray.getDirection());
+
+				gridValues[shorestAxis] = static_cast<int32_t>(tempRay.getOrigin().getY());
+				gridValues[middleAxis] = static_cast<int32_t>(tempRay.getOrigin().getX());
+				//floor the tMin value
+				gridValues[longestAxis] += static_cast<int32_t>(tMin) * longestAxisDiff;
+				if (static_cast<uint32_t>(gridValues[0] > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1))
+				{
+					return FINISH_VAL;
+				}
+				uint32_t localVoxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+				uint32_t localClusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+				assert(clusterID >= 0 && clusterID < 512);
+				uint32_t* localBlockLocation = deviceBlockMemAddress[clusterID];
+				//Perform lookup for intermediate voxel location
+				if (uint32_t voxelColor = performBinarySearch(localBlockLocation, localVoxelID) != EMPTY_VAL)
+					return voxelColor;
+				//Snap to the longest axis and perform lookup
+				int32_t snappedTVal = static_cast<int32_t>(std::ceilf(tMin));
+				ray = Ray2D(ray.getOrigin() + snappedTVal * ray.getDirection(), ray.getDirection());
+
+				gridValues[shorestAxis] = static_cast<int32_t>(ray.getOrigin().getY());
+				gridValues[middleAxis] = static_cast<int32_t>(ray.getOrigin().getX());
+				gridValues[longestAxis] += snappedTVal * longestAxisDiff;
+				if (static_cast<uint32_t>(gridValues[0]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1)
+					return FINISH_VAL;
+				voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+				clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+				assert(clusterID >= 0 && clusterID < 512);
+				blockLocation = deviceBlockMemAddress[clusterID];
 			}
 			else
 			{
-				high = mid - 1;
+				//Perform calculation along the longest axis
+				ray = Ray2D(ray.getOrigin() + longestAxisJump * ray.getDirection(), ray.getDirection());
+
+				gridValues[shorestAxis] = static_cast<int32_t>(ray.getOrigin().getY());
+				gridValues[middleAxis] = static_cast<int32_t>(ray.getOrigin().getX());
+				gridValues[longestAxis] += longestAxisJump;
+				if (static_cast<uint32_t>(gridValues[0]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1)
+					return FINISH_VAL;
+				voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+				clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
+				assert(clusterID >= 0 && clusterID < 512);
+				blockLocation = deviceBlockMemAddress[clusterID];
 			}
 		}
-		return EMPTY_VAL;
+
+		return performBinarySearch(blockLocation, voxelID);
 	}
 
 	__device__ uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const
@@ -182,30 +259,7 @@ public:
 			blockLocation = deviceBlockMemAddress[clusterID];
 		}
 
-		//Binary Search
-		uint32_t blockSize = *blockLocation;
-		int32_t low = 0;
-		int32_t high = blockSize-1;
-		while (low <= high)
-		{
-			int32_t mid = low + (high - low) / 2;
-			//Check if the key matches
-			if (blockLocation[mid*2 + 1] == voxelID)
-			{
-				//Return the value pairing
-				return blockLocation[mid*2 + 2];
-			}
-
-			if (blockLocation[mid*2 + 1] < voxelID)
-			{
-				low = mid + 1;
-			}
-			else
-			{
-				high = mid - 1;
-			}
-		}
-		return EMPTY_VAL;
+		return performBinarySearch(blockLocation, voxelID);
 	}
 
 private:
