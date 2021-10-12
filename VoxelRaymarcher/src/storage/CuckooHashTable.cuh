@@ -76,9 +76,9 @@ public:
 		cudaFree(deviceValue2Bucket);
 	}
 
-	__device__ uint32_t lookupVoxel(int32_t* gridValues) const
+	__device__ uint32_t lookupVoxel(int32_t x, int32_t y, int32_t z) const
 	{
-		uint32_t code = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
+		uint32_t code = voxelfunc::generate3DPoint(x, y, z);
 		uint32_t key1 = (hashFunc1(code) % numElements + numElements) % numElements;
 		if (deviceKey1Bucket[key1] == code)
 		{

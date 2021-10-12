@@ -12,9 +12,8 @@
 class StorageStructure
 {
 public:
-	__device__ virtual uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const = 0;
-	__device__ virtual uint32_t lookupVoxelLongestAxis(int32_t* gridValues, Ray2D& ray, int32_t longestAxisDiff, 
-		uint32_t shortestAxis, uint32_t middleAxis, uint32_t longestAxis) const = 0;
+	__device__ virtual uint32_t lookupVoxel(int32_t x, int32_t y, int32_t z) const = 0;
+	__device__ virtual bool doesVoxelSpaceExist(int32_t x, int32_t y, int32_t z) const = 0;
 };
 
 class VCSStorageStructure : public StorageStructure
@@ -22,15 +21,14 @@ class VCSStorageStructure : public StorageStructure
 public:
 	__device__ VCSStorageStructure(VoxelClusterStore* voxelClusterStore) : voxelClusterStorePtr(voxelClusterStore) {}
 
-	__device__ virtual uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const override
+	__device__ virtual uint32_t lookupVoxel(int32_t x, int32_t y, int32_t z) const override
 	{
-		return voxelClusterStorePtr->lookupVoxel(gridValues, ray);
+		return voxelClusterStorePtr->lookupVoxel(x, y, z);
 	}
 
-	__device__ virtual uint32_t lookupVoxelLongestAxis(int32_t* gridValues, Ray2D& ray, int32_t longestAxisDiff, 
-		uint32_t shortestAxis, uint32_t middleAxis, uint32_t longestAxis) const override
+	__device__ virtual bool doesVoxelSpaceExist(int32_t x, int32_t y, int32_t z) const override
 	{
-		return voxelClusterStorePtr->lookupVoxelLongestAxis(gridValues, ray, longestAxisDiff, shortestAxis, middleAxis, longestAxis);
+		return voxelClusterStorePtr->doesClusterExist(x, y, z);
 	}
 
 private:
@@ -42,15 +40,15 @@ class HashTableStorageStructure : public StorageStructure
 public:
 	__device__ HashTableStorageStructure(CuckooHashTable* hashTable) : hashTablePtr(hashTable) {}
 
-	__device__ virtual uint32_t lookupVoxel(int32_t* gridValues, Ray& ray) const override
+	__device__ virtual uint32_t lookupVoxel(int32_t x, int32_t y, int32_t z) const override
 	{
-		return hashTablePtr->lookupVoxel(gridValues);
+		return hashTablePtr->lookupVoxel(x, y, z);
 	}
 
-	__device__ virtual uint32_t lookupVoxelLongestAxis(int32_t* gridValues, Ray2D& ray, int32_t longestAxisDiff,
-		uint32_t shortestAxis, uint32_t middleAxis, uint32_t longestAxis) const override
+	//The hash table does not split voxel into spaces therefore the voxel space always exists
+	__device__ virtual bool doesVoxelSpaceExist(int32_t x, int32_t y, int32_t z) const override
 	{
-		return hashTablePtr->lookupVoxel(gridValues);
+		return true;
 	}
 
 private:
