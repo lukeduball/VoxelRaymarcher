@@ -121,7 +121,7 @@ public:
 	{
 		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-		assert(clusterID >= 0 && clusterID < 512);
+		ASSERT(clusterID >= 0 && clusterID < 512, "");
 		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
 		//Keep going though empty blocks until a populated block is found
 		while (blockLocation == nullptr)
@@ -146,7 +146,7 @@ public:
 				return EMPTY_VAL;
 			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-			assert(clusterID >= 0 && clusterID < 512);
+			ASSERT(clusterID >= 0 && clusterID < 512, "");
 			blockLocation = deviceBlockMemAddress[clusterID];
 		}
 
@@ -157,7 +157,7 @@ public:
 	{
 		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-		assert(clusterID >= 0 && clusterID < 512);
+		ASSERT(clusterID >= 0 && clusterID < 512, "");
 		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
 		//Keep traversing empty blocks until a populated block is found
 		while (blockLocation == nullptr)
@@ -181,17 +181,20 @@ public:
 				gridValues[middleAxis] = static_cast<int32_t>(tempRay.getOrigin().getX());
 				//floor the tMin value
 				gridValues[longestAxis] += static_cast<int32_t>(tMin) * longestAxisDiff;
-				if (static_cast<uint32_t>(gridValues[0] > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1))
+				if (static_cast<uint32_t>(gridValues[0]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[1]) > BLOCK_SIZE - 1 || static_cast<uint32_t>(gridValues[2]) > BLOCK_SIZE - 1)
 				{
 					return FINISH_VAL;
 				}
 				uint32_t localVoxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 				uint32_t localClusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-				assert(clusterID >= 0 && clusterID < 512);
+				ASSERT(clusterID >= 0 && clusterID < 512, "");
 				uint32_t* localBlockLocation = deviceBlockMemAddress[clusterID];
-				//Perform lookup for intermediate voxel location
-				if (uint32_t voxelColor = performBinarySearch(localBlockLocation, localVoxelID) != EMPTY_VAL)
-					return voxelColor;
+				if (localBlockLocation)
+				{
+					//Perform lookup for intermediate voxel location
+					if (uint32_t voxelColor = performBinarySearch(localBlockLocation, localVoxelID) != EMPTY_VAL)
+						return voxelColor;
+				}
 				//Snap to the longest axis and perform lookup
 				int32_t snappedTVal = static_cast<int32_t>(std::ceilf(tMin));
 				ray = Ray2D(ray.getOrigin() + snappedTVal * ray.getDirection(), ray.getDirection());
@@ -203,7 +206,7 @@ public:
 					return FINISH_VAL;
 				voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 				clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-				assert(clusterID >= 0 && clusterID < 512);
+				ASSERT(clusterID >= 0 && clusterID < 512, "");
 				blockLocation = deviceBlockMemAddress[clusterID];
 			}
 			else
@@ -218,7 +221,7 @@ public:
 					return FINISH_VAL;
 				voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 				clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-				assert(clusterID >= 0 && clusterID < 512);
+				ASSERT(clusterID >= 0 && clusterID < 512, "");
 				blockLocation = deviceBlockMemAddress[clusterID];
 			}
 		}
@@ -230,7 +233,7 @@ public:
 	{
 		uint32_t voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 		short clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-		assert(clusterID >= 0 && clusterID < 512);
+		ASSERT(clusterID >= 0 && clusterID < 512, "");
 		uint32_t* blockLocation = deviceBlockMemAddress[clusterID];
 		//Keep going though empty blocks until a populated block is found
 		while (blockLocation == nullptr)
@@ -255,7 +258,7 @@ public:
 				return FINISH_VAL;
 			voxelID = voxelfunc::generate3DPoint(gridValues[0], gridValues[1], gridValues[2]);
 			clusterID = getVoxelClusterID(gridValues[0], gridValues[1], gridValues[2]);
-			assert(clusterID >= 0 && clusterID < 512);
+			ASSERT(clusterID >= 0 && clusterID < 512, "");
 			blockLocation = deviceBlockMemAddress[clusterID];
 		}
 

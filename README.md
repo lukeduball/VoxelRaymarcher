@@ -3,6 +3,26 @@
 ---
 This project implements a Voxel Raymarching Renderer. The scenes that are raymarched consist entirely of axis aligned voxels which are given a color value. Rays are then cast into the scene for each pixel and "marched" over the underlaying voxel structure in order to find if a ray intersects a voxel. If it does, lighting is applied to the color and its color value is written back to the pixel location. Using this method, the entire scene is rendered.
 
+## Setup Instructions
+Download the Cuda Toolkit from https://developer.nvidia.com/cuda-toolkit
+Download an install Visual Studio 2019
+
+1. Clone the repository into a new folder
+2. Navigate to the VoxelRaymarcher folder and open the VoxelRaymarcher.sln with Visual Studio 2019
+3. Build the software (all dependencies are included and the path to the Cuda Toolkit should will be populated after installing the Cuda Toolkit from the above link)
+
+## Running the Raymarcher
+After performing a software build the executables can be run in the following way.
+
+1. Open the command prompt
+2. Navigate to VoxelRaymarcher/x64/Debug/ or navigate to VoxelRaymarcher/x64/Release/ based on the configuration that it was built with
+3. Run the program with the desired command
+    - Original Raymarching Algorithm with a Hashtable `./VoxelRaymarcher.exe hashtable original`
+    - Original Raymarching Algorithm with a Voxel Cluster Store `./VoxelRaymarcher.exe vcs original`
+    - Longest Axis Raymarching Algorithm with a Hashtable `./VoxelRaymarcher.exe hashtable jumpaxis`
+    - Longest Axis Raymarching Algorithm with a Voxel Cluster Store `./VoxelRaymarcher.exe vcs jumpaxis`
+4. View the resulting image in the VoxelRaymarcher/x64/[Debug/Release]/ folder with the name `output.png`
+
 ## Raymarching Algorithms
 ---
 Two different type of raymarching algorithms are implemented as methods to traverse the underlaying axis aligned grid which contains the voxels. The two methods are the original raymarching algorithm and the jump axis raymarching algorithm.

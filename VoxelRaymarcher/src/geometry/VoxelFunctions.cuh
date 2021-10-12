@@ -4,8 +4,17 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <cstdlib>
+#include <cstdio>
 
 #include "../math/Vector3.cuh"
+
+#ifndef NDEBUG
+#define ASSERT(cond, str) if(!(cond)) {printf("ASSERTION FAILED: (%s) %s in File %s, Line %d\n", #cond, str, __FILE__, __LINE__); asm("trap;"); }
+#else
+#define ASSERT(cond, str)
+#endif // NDEBUG
+
 
 constexpr float EPSILON = 0.0001f;
 __constant__ const uint32_t EMPTY_KEY = 1 << 30;
