@@ -5,7 +5,8 @@ This project implements a Voxel Raymarching Renderer. The scenes that are raymar
 
 ## Setup Instructions
 Download the Cuda Toolkit from https://developer.nvidia.com/cuda-toolkit
-Download an install Visual Studio 2019
+
+Download and install Visual Studio 2019
 
 1. Clone the repository into a new folder
 2. Navigate to the VoxelRaymarcher folder and open the VoxelRaymarcher.sln with Visual Studio 2019
