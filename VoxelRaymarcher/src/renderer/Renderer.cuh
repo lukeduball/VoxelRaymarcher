@@ -77,82 +77,35 @@ __device__ bool isInShadowOriginalRayMarch(const Ray& originalRay, StorageStruct
 		return false;
 	}
 
-	Ray ray = originalRay;
-	//Calculate once outside of the loop to increase performance
-	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
-	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
-	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon1 : applyFloorAndNegEpsilon1;
-
-	//Calculate the next voxel location
-
-	float nextX = nextXFunc(ray.getOrigin().getX());
-	float nextY = nextYFunc(ray.getOrigin().getY());
-	float nextZ = nextZFunc(ray.getOrigin().getZ());
-	//Calculate the t-values along the ray
-	float tX = ray.getDirection().getX() != 0.0f ? (nextX - ray.getOrigin().getX()) / ray.getDirection().getX() : INFINITY;
-	float tY = ray.getDirection().getY() != 0.0f ? (nextY - ray.getOrigin().getY()) / ray.getDirection().getY() : INFINITY;
-	float tZ = ray.getDirection().getZ() != 0.0f ? (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ() : INFINITY;
-	//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-	float tMin = min(tX, min(tY, tZ));
-
-	//Create the ray at the next position
-	ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
-
-	while (isRayInRegion(ray))
-	{
-		//Perform the lookup first so that the next ray location can be checked before lookup to avoid accessing memory that should not be in VCS
-		int32_t voxelX = static_cast<int32_t>(ray.getOrigin().getX());
-		int32_t voxelY = static_cast<int32_t>(ray.getOrigin().getY());
-		int32_t voxelZ = static_cast<int32_t>(ray.getOrigin().getZ());
-
-		//Checks if a "voxel space" exists and moves the ray until it is in a valid voxel space (i.e. if a Voxel Cluster does not exist, skip to the next cluster)
-		if (!storageStructure->doesVoxelSpaceExist(voxelX, voxelY, voxelZ))
-		{
-			//Skip to the next block location
-			int32_t nextX = ray.getDirection().getX() > 0.0f ? ((voxelX / 8) + 1) * 8 : (voxelX / 8) * 8 - 1;
-			int32_t nextY = ray.getDirection().getY() > 0.0f ? ((voxelY / 8) + 1) * 8 : (voxelY / 8) * 8 - 1;
-			int32_t nextZ = ray.getDirection().getZ() > 0.0f ? ((voxelZ / 8) + 1) * 8 : (voxelZ / 8) * 8 - 1;
-			//Calculate the t-values along the ray
-			float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-			float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-			float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-			//Find the minimum t-value
-			float tMin = min(tX, min(tY, tZ));
-
-			//Create the ray at the next position
-			ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
-			continue;
-		}
-		//Check if a voxel exists at the given voxel space
-		uint32_t voxelColor = storageStructure->lookupVoxel(voxelX, voxelY, voxelZ);
-		if (voxelColor != EMPTY_KEY && voxelColor != FINISH_VAL)
-		{
-			return true;
-		}
-
-		//Calculate the next voxel location
-
-		nextX = nextXFunc(ray.getOrigin().getX());
-		nextY = nextYFunc(ray.getOrigin().getY());
-		nextZ = nextZFunc(ray.getOrigin().getZ());
-		//Calculate the t-values along the ray
-		tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-		tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-		tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-		tMin = min(tX, min(tY, tZ));
-
-		//Create the ray at the next position
-		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
-	}
-
-	//Return the background color of black
 	return false;
 }
 
 __device__ __forceinline__ bool isRayInScene(uint32_t x, uint32_t y, uint32_t z)
 {
 	return x < BLOCK_SIZE && y < BLOCK_SIZE && z < BLOCK_SIZE;
+}
+
+__device__ __forceinline__ Vector3f getNormalFromTValues(float tX, float tY, float tZ, float tMin, const Vector3f& rayDirection)
+{
+	Vector3f normal;
+	if (tX == tMin)
+		normal = Vector3f(copysignf(1.0f, -rayDirection.getX()), 0.0f, 0.0f);
+	else if (tY == tMin)
+		normal = Vector3f(0.0f, copysignf(1.0f, -rayDirection.getY()), 0.0f);
+	else
+		normal = Vector3f(0.0f, 0.0f, copysignf(1.0f, -rayDirection.getZ()));
+	return normal;
+}
+
+__device__ __forceinline__ uint32_t applyLighting(uint32_t voxelColor, const Vector3f& normal, const Vector3f& regionWorldPosition, const Vector3f& rayOrigin)
+{
+	if (USE_POINT_LIGHT)
+	{
+		Vector3f hitPoint = getHitLocation(regionWorldPosition, rayOrigin);
+		return applyPointLightingToColor(voxelColor, hitPoint, normal);
+	}
+	
+	return applyDirectionalLightingToColor(voxelColor, normal);
 }
 
 __device__ uint32_t rayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPosition, StorageStructure* storageStructure)
@@ -204,33 +157,12 @@ __device__ uint32_t rayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPositi
 		}
 		//Check if a voxel exists at the given voxel space
 		uint32_t voxelColor = storageStructure->lookupVoxel(voxelX, voxelY, voxelZ);
-		if (voxelColor != EMPTY_KEY && voxelColor != FINISH_VAL)
+		if (voxelColor != EMPTY_KEY)
 		{
 			//Find the normal based on which axis is hit
-			Vector3f normal;
-			if (tMin == tX)
-			{
-				normal = Vector3f(copysignf(1.0f, -ray.getDirection().getX()), 0.0f, 0.0f);
-			}
-			else if (tMin == tY)
-			{
-				normal = Vector3f(0.0f, copysignf(1.0f, -ray.getDirection().getY()), 0.0f);
-			}
-			else
-			{
-				normal = Vector3f(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
-			}
-
-			uint32_t resultingColor = 0;
-			if (USE_POINT_LIGHT)
-			{
-				Vector3f hitPoint = getHitLocation(regionWorldPosition, ray.getOrigin());
-				resultingColor = applyPointLightingToColor(voxelColor, hitPoint, normal);
-			}
-			else
-			{
-				resultingColor = applyDirectionalLightingToColor(voxelColor, normal);
-			}
+			Vector3f normal = getNormalFromTValues(tX, tY, tZ, tMin, ray.getDirection());
+			//Apply lighting to the color value
+			uint32_t resultingColor = applyLighting(voxelColor, normal, regionWorldPosition, ray.getOrigin());
 			return resultingColor * !isInShadowOriginalRayMarch(Ray(ray.getOrigin(), LIGHT_DIRECTION), storageStructure);
 		}
 
@@ -323,63 +255,6 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 	return 0;
 }
 
-__device__ Ray2D generateLongestDirectionRay2D(Ray ray, uint32_t& longestAxis, uint32_t& middleAxis, uint32_t& shorestAxis)
-{
-	float xDirAbs = fabsf(ray.getDirection().getX());
-	float yDirAbs = fabsf(ray.getDirection().getY());
-	float zDirAbs = fabsf(ray.getDirection().getZ());
-	float constant = 0.0f;
-	if (xDirAbs > yDirAbs && xDirAbs > zDirAbs)
-	{
-		longestAxis = 0;
-		if (yDirAbs > zDirAbs)
-		{
-			middleAxis = 1;
-			shorestAxis = 2;
-		}
-		else
-		{
-			middleAxis = 2;
-			shorestAxis = 1;
-		}
-		constant = 1.0f / xDirAbs;
-	}
-	else if (yDirAbs > zDirAbs)
-	{
-		longestAxis = 1;
-		if (xDirAbs > zDirAbs)
-		{
-			middleAxis = 0;
-			shorestAxis = 2;
-		}
-		else
-		{
-			middleAxis = 2;
-			shorestAxis = 0;
-		}
-		constant = 1.0f / yDirAbs;
-	}
-	else
-	{
-		longestAxis = 2;
-		if (xDirAbs > yDirAbs)
-		{
-			middleAxis = 0;
-			shorestAxis = 1;
-		}
-		else
-		{
-			middleAxis = 1;
-			shorestAxis = 0;
-		}
-		constant = 1.0f / zDirAbs;
-	}
-	return Ray2D(
-		Vector2f(ray.getOrigin()[middleAxis], ray.getOrigin()[shorestAxis]), 
-		Vector2f(ray.getDirection()[middleAxis] * constant, ray.getDirection()[shorestAxis] * constant)
-	);
-}
-
 __device__ __forceinline__ bool areGridValuesInRegion(uint32_t x, uint32_t y, uint32_t z)
 {
 	return x < BLOCK_SIZE && y < BLOCK_SIZE && z < BLOCK_SIZE;
@@ -424,25 +299,8 @@ __device__ uint32_t performVoxelSpaceJump(Ray& originalRay, Vector3f regionWorld
 	if (voxelColor != EMPTY_VAL)
 	{
 		//Find the normal based on which axis is hit
-		Vector3f normal;
-		if (tMin == tX)
-		{
-			normal = Vector3f(copysignf(1.0f, -ray.getDirection().getX()), 0.0f, 0.0f);
-		}
-		else if (tMin == tY)
-		{
-			normal = Vector3f(0.0f, copysignf(1.0f, -ray.getDirection().getY()), 0.0f);
-		}
-		else
-		{
-			normal = Vector3f(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
-		}
-		if (USE_POINT_LIGHT)
-		{
-			Vector3f hitPoint = getHitLocation(regionWorldPosition, oldRay.getOrigin());
-			return applyPointLightingToColor(voxelColor, hitPoint, normal);
-		}
-		return applyDirectionalLightingToColor(voxelColor, normal);
+		Vector3f normal = getNormalFromTValues(tX, tY, tZ, tMin, oldRay.getDirection());
+		return applyLighting(voxelColor, normal, regionWorldPosition, oldRay.getOrigin());
 	}
 
 	//Calculate the t-value for the next location of the ray which is snapped to the longest axis
@@ -524,12 +382,7 @@ __device__ uint32_t rayMarchVoxelGridLongestAxis(Ray& originalRay, const Vector3
 			{
 				Vector3f normal = Vector3f(0.0f, 0.0f, 0.0f);
 				normal[applyOrder[0]] = std::copysignf(1.0f, -ray.getDirection()[applyOrder[0]]);
-				if (USE_POINT_LIGHT)
-				{
-					Vector3f hitPoint = getHitLocation(regionWorldPosition, getLocalHitLocation(oldRay, applyOrder[0]));
-					return applyPointLightingToColor(colorValue, hitPoint, normal);
-				}
-				return applyDirectionalLightingToColor(colorValue, normal);
+				return applyLighting(colorValue, normal, regionWorldPosition, getLocalHitLocation(oldRay, applyOrder[0]));
 			}
 
 			gridValues[applyOrder[1]] += axisDiff[applyOrder[1]];
@@ -545,12 +398,7 @@ __device__ uint32_t rayMarchVoxelGridLongestAxis(Ray& originalRay, const Vector3
 			{
 				Vector3f normal = Vector3f(0.0f, 0.0f, 0.0f);
 				normal[applyOrder[1]] = std::copysignf(1.0f, -ray.getDirection()[applyOrder[1]]);
-				if (USE_POINT_LIGHT)
-				{
-					Vector3f hitPoint = getHitLocation(regionWorldPosition, getLocalHitLocation(oldRay, applyOrder[1]));
-					return applyPointLightingToColor(colorValue, hitPoint, normal);
-				}
-				return applyDirectionalLightingToColor(colorValue, normal);
+				return applyLighting(colorValue, normal, regionWorldPosition, getLocalHitLocation(oldRay, applyOrder[1]));
 			}
 		}
 		//Only middle axis has an axis difference
@@ -569,12 +417,7 @@ __device__ uint32_t rayMarchVoxelGridLongestAxis(Ray& originalRay, const Vector3
 			{
 				Vector3f normal = Vector3f(0.0f, 0.0f, 0.0f);
 				normal[middleAxis] = std::copysignf(1.0f, -ray.getDirection()[middleAxis]);
-				if (USE_POINT_LIGHT)
-				{
-					Vector3f hitPoint = getHitLocation(regionWorldPosition, getLocalHitLocation(oldRay, middleAxis));
-					return applyPointLightingToColor(colorValue, hitPoint, normal);
-				}
-				return applyDirectionalLightingToColor(colorValue, normal);
+				return applyLighting(colorValue, normal, regionWorldPosition, getLocalHitLocation(oldRay, middleAxis));
 			}
 		}
 		//Only shortest axis has an axis difference
@@ -593,12 +436,7 @@ __device__ uint32_t rayMarchVoxelGridLongestAxis(Ray& originalRay, const Vector3
 			{
 				Vector3f normal = Vector3f(0.0f, 0.0f, 0.0f);
 				normal[shortestAxis] = std::copysignf(1.0f, -ray.getDirection()[shortestAxis]);
-				if (USE_POINT_LIGHT)
-				{
-					Vector3f hitPoint = getHitLocation(regionWorldPosition, getLocalHitLocation(oldRay, shortestAxis));
-					return applyPointLightingToColor(colorValue, hitPoint, normal);
-				}
-				return applyDirectionalLightingToColor(colorValue, normal);
+				return applyLighting(colorValue, normal, regionWorldPosition, getLocalHitLocation(oldRay, shortestAxis));
 			}
 		}
 		//Always perform longest axis check
@@ -615,12 +453,7 @@ __device__ uint32_t rayMarchVoxelGridLongestAxis(Ray& originalRay, const Vector3
 		{
 			Vector3f normal = Vector3f(0.0f, 0.0f, 0.0f);
 			normal[longestAxis] = std::copysignf(1.0f, -ray.getDirection()[longestAxis]);
-			if (USE_POINT_LIGHT)
-			{
-				Vector3f hitPoint = getHitLocation(regionWorldPosition, ray.getOrigin());
-				return applyPointLightingToColor(colorValue, hitPoint, normal);
-			}
-			return applyDirectionalLightingToColor(colorValue, normal);
+			return applyLighting(colorValue, normal, regionWorldPosition, ray.getOrigin());
 		}
 		
 		oldRay = ray;
@@ -727,27 +560,6 @@ __forceinline__ __device__ void writeColorToFramebuffer(uint32_t xPixel, uint32_
 	framebuffer[pixelIndex + 2] = voxelfunc::getBlueComponent(color);
 }
 
-__forceinline__ __device__ void populateStorageStructures(void** storageStructureArr, uint32_t arrSize, StorageStructure** storageArr, StorageType storageType)
-{
-	switch (storageType)
-	{
-	case StorageType::HASH_TABLE:
-		for (uint32_t i = 0; i < arrSize; i++)
-		{
-			if(storageStructureArr[i])
-				storageArr[i] = new HashTableStorageStructure(static_cast<CuckooHashTable*>(storageStructureArr[i]));
-		}
-		break;
-	case StorageType::VOXEL_CLUSTER_STORE:
-		for (uint32_t i = 0; i < arrSize; i++)
-		{
-			if(storageStructureArr[i])
-				storageArr[i] = new VCSStorageStructure(static_cast<VoxelClusterStore*>(storageStructureArr[i]));
-		}
-		break;
-	}
-}
-
 __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelSceneInfo* voxelSceneInfo, uint8_t* framebuffer, 
 	StorageStructure** voxelScene, uint32_t arrSize, StorageType storageType)
 {
@@ -778,7 +590,25 @@ __global__ void rayMarchSceneJumpAxis(uint32_t imgWidth, uint32_t imgHeight, Cam
 	writeColorToFramebuffer(xPixel, yPixel, imgWidth, color, framebuffer);
 }
 
+//Populates the storage structures on the device so that their virtual functions can be setup correctly
 __global__ void generateVoxelScene(StorageStructure** devicePtr, void** storageStructureArr, uint32_t arrSize, StorageType storageType)
 {
-	populateStorageStructures(storageStructureArr, arrSize, devicePtr, storageType);
+	//The storage structure points are stored in the devicePtr array which is passed into the ray marching functions from the host
+	switch (storageType)
+	{
+	case StorageType::HASH_TABLE:
+		for (uint32_t i = 0; i < arrSize; i++)
+		{
+			if (storageStructureArr[i])
+				devicePtr[i] = new HashTableStorageStructure(static_cast<CuckooHashTable*>(storageStructureArr[i]));
+		}
+		break;
+	case StorageType::VOXEL_CLUSTER_STORE:
+		for (uint32_t i = 0; i < arrSize; i++)
+		{
+			if (storageStructureArr[i])
+				devicePtr[i] = new VCSStorageStructure(static_cast<VoxelClusterStore*>(storageStructureArr[i]));
+		}
+		break;
+	}
 }
