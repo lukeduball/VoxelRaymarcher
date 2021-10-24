@@ -31,7 +31,7 @@ void setupConstantValues()
 	bool hostUsePointLight = false;
 	cudaMemcpyToSymbol(USE_POINT_LIGHT, &hostUsePointLight, sizeof(bool));
 
-	bool hostUseShadows = false;
+	bool hostUseShadows = true;
 	cudaMemcpyToSymbol(USE_SHADOWS, &hostUseShadows, sizeof(bool));
 }
 
@@ -142,12 +142,12 @@ int main(int argc, char* argv[])
 		if (rayMarchFunctionID == 0)
 		{
 			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelSceneInfo, deviceFramebuffer,
-				deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
+				deviceVoxelScene, voxelScene.getArrayDiameter(), StorageType(voxelLookupFunctionID));
 		}
 		else if (rayMarchFunctionID == 1)
 		{
 			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelSceneInfo, deviceFramebuffer,
-				deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
+				deviceVoxelScene, voxelScene.getArrayDiameter(), StorageType(voxelLookupFunctionID));
 		}
 	}
 	else

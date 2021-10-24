@@ -92,9 +92,14 @@ public:
 		cudaFree(deviceVoxelScene);
 	}
 
+	uint32_t getArrayDiameter()
+	{
+		return maxCoord - minCoord + 1;
+	}
+
 	uint32_t getArraySize()
 	{
-		int32_t arrayDiameter = maxCoord - minCoord + 1;
+		int32_t arrayDiameter = getArrayDiameter();
 		return arrayDiameter * arrayDiameter * arrayDiameter;
 	}
 

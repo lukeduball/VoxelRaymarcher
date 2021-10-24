@@ -21,7 +21,8 @@ __constant__ const uint32_t EMPTY_KEY = 1 << 30;
 __constant__ const uint32_t EMPTY_VAL = 1 << 30;
 __constant__ const uint32_t FINISH_VAL = EMPTY_VAL + 1;
 __constant__ const uint32_t CONTINUE_VAL = EMPTY_VAL + 2;
-__constant__ const uint32_t BLOCK_SIZE = 64;
+__constant__ const int32_t BLOCK_SIZE = 64;
+__constant__ const int32_t CLUSTER_SIZE = 8;
 
 __constant__ Vector3f LIGHT_DIRECTION;
 __constant__ Vector3f LIGHT_COLOR;
