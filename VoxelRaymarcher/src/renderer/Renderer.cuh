@@ -972,7 +972,7 @@ __forceinline__ __device__ void writeColorToFramebuffer(uint32_t xPixel, uint32_
 }
 
 __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelSceneInfo* voxelSceneInfo, uint8_t* framebuffer, 
-	StorageStructure** voxelSceneStore, uint32_t arrDiameter, StorageType storageType)
+	StorageStructure** voxelSceneStore, uint32_t arrDiameter)
 {
 	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
@@ -988,7 +988,7 @@ __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Cam
 }
 
 __global__ void rayMarchSceneJumpAxis(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelSceneInfo* voxelSceneInfo, uint8_t* framebuffer,
-	StorageStructure** voxelSceneStore, uint32_t arrDiameter, StorageType storageType)
+	StorageStructure** voxelSceneStore, uint32_t arrDiameter)
 {
 	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
