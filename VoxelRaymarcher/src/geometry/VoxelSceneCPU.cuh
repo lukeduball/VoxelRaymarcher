@@ -5,6 +5,8 @@
 
 #include "VoxelFunctions.cuh"
 
+#include "../memory/MemoryUtils.h"
+
 #include "../storage/VoxelClusterStore.cuh"
 #include "../storage/CuckooHashTable.cuh"
 
@@ -13,9 +15,9 @@ class VoxelSceneCPU
 public:
 	void insertVoxel(int32_t x, int32_t y, int32_t z, uint32_t color)
 	{
-		int32_t voxelStructureIDX = x / BLOCK_SIZE;
-		int32_t voxelStructureIDY = y / BLOCK_SIZE;
-		int32_t voxelStructureIDZ = z / BLOCK_SIZE;
+		int32_t voxelStructureIDX = std::floorf(x / (float)BLOCK_SIZE);
+		int32_t voxelStructureIDY = std::floorf(y / (float)BLOCK_SIZE);
+		int32_t voxelStructureIDZ = std::floorf(z / (float)BLOCK_SIZE);
 		
 		//To account for negative values, add the BLOCK_SIZE to the remainder and find the remainer again
 		uint32_t localVoxelX = ((x % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
@@ -89,6 +91,7 @@ public:
 			//TODO add host tracker to clean up this memory
 			//cudaFree(deviceVoxelScene[i]);
 		}
+		CudaMemoryUtils::ManagedCudaFree(deviceVoxelScene, "Voxel Scene (raw table of pointers to the regions' storage structures)");
 		cudaFree(deviceVoxelScene);
 	}
 
@@ -101,6 +104,11 @@ public:
 	{
 		int32_t arrayDiameter = getArrayDiameter();
 		return arrayDiameter * arrayDiameter * arrayDiameter;
+	}
+
+	int32_t getMinCoord()
+	{
+		return minCoord;
 	}
 
 	void** deviceVoxelScene;

@@ -20,15 +20,27 @@
 class VoxelScene
 {
 public:
-	__device__ VoxelScene(StorageStructure** storePtr, uint32_t size) : sceneStorage(storePtr), arrDiameter(size) {}
+	__device__ VoxelScene(StorageStructure** storePtr, uint32_t size, int32_t mCoord) : sceneStorage(storePtr), arrDiameter(size), minCoord(mCoord) {}
 
 	StorageStructure** sceneStorage;
 	uint32_t arrDiameter;
+	int32_t minCoord;
 
-	__device__ __forceinline__ StorageStructure* getRegionStorageStructure(uint32_t x, uint32_t y, uint32_t z) const
+	__device__ __forceinline__ StorageStructure* getRegionStorageStructure(int32_t x, int32_t y, int32_t z) const
 	{
-		ASSERT( x < arrDiameter && y < arrDiameter && z < arrDiameter, "");
-		return sceneStorage[x + y * arrDiameter + z * arrDiameter * arrDiameter];
+		uint32_t uX = x - minCoord;
+		uint32_t uY = y - minCoord;
+		uint32_t uZ = z - minCoord;
+		ASSERT( uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter, "");
+		return sceneStorage[uX + uY * arrDiameter + uZ * arrDiameter * arrDiameter];
+	}
+
+	__device__ __forceinline__ bool isRayInScene(int32_t x, int32_t y, int32_t z) const
+	{
+		uint32_t uX = x - minCoord;
+		uint32_t uY = y - minCoord;
+		uint32_t uZ = z - minCoord;
+		return uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter;
 	}
 };
 
@@ -83,11 +95,6 @@ __device__ __forceinline__ bool isRayInRegion(const Ray& ray)
 	return ray.getOrigin().getX() >= 0.0f && ray.getOrigin().getX() < BLOCK_SIZE &&
 		ray.getOrigin().getY() >= 0.0f && ray.getOrigin().getY() < BLOCK_SIZE &&
 		ray.getOrigin().getZ() >= 0.0f && ray.getOrigin().getZ() < BLOCK_SIZE;
-}
-
-__device__ __forceinline__ bool isRayInScene(uint32_t x, uint32_t y, uint32_t z, uint32_t arrayDiameter)
-{
-	return x < arrayDiameter && y < arrayDiameter && z < arrayDiameter;
 }
 
 __device__ uint32_t shadowRayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPosition, StorageStructure* storageStructure, const VoxelScene& voxelScene, const VoxelSceneInfo* voxelSceneInfo)
@@ -172,7 +179,7 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 	}
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+	while (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		StorageStructure* regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -198,7 +205,7 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
 			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * static_cast<int32_t>(BLOCK_SIZE), regionYDiff * static_cast<int32_t>(BLOCK_SIZE), regionZDiff * static_cast<int32_t>(BLOCK_SIZE)), 1.0f);
-			if (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+			if (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return false;
 		}
@@ -334,9 +341,34 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 	Ray sceneRay = originalRay.convertRayToLocalSpace(sceneInfo->translationVector, sceneInfo->scale);
 
 	//determine the region coordinates of the ray
-	Vector3i currentRegion = Vector3i(static_cast<uint32_t>(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE)),
-		static_cast<uint32_t>(floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE)),
-		static_cast<uint32_t>(floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE)));
+	Vector3i currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
+		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
+		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+
+	if (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 || 
+		currentRegion.getX() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getY() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getZ() - voxelScene.minCoord > voxelScene.arrDiameter - 1)
+	{
+		int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+		int32_t nextY = sceneRay.getDirection().getY() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+		int32_t nextZ = sceneRay.getDirection().getZ() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+
+		float tX = (nextX * BLOCK_SIZE - sceneRay.getOrigin().getX()) / sceneRay.getDirection().getX();
+		float tY = (nextY * BLOCK_SIZE - sceneRay.getOrigin().getY()) / sceneRay.getDirection().getY();
+		float tZ = (nextZ * BLOCK_SIZE - sceneRay.getOrigin().getZ()) / sceneRay.getDirection().getZ();
+
+		if (tX < 0.0f) tX = INFINITY;
+		if (tY < 0.0f) tY = INFINITY;
+		if (tZ < 0.0f) tZ = INFINITY;
+
+		float tMin = min(tX, min(tY, tZ));
+		if (tMin == INFINITY) return 0;
+
+		sceneRay = Ray(sceneRay.getOrigin() + (tMin + EPSILON) * sceneRay.getDirection(), sceneRay.getDirection());
+
+		currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
+			floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
+			floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+	}
 
 	//Transform the ray into the local coordinates of the current region it is located in
 	Ray localRay = sceneRay.convertRayToLocalSpace(
@@ -344,7 +376,7 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 	);
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+	while (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		StorageStructure* regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -370,7 +402,7 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
 			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
-			if (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+			if (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return 0;
 		}
@@ -604,7 +636,7 @@ __device__ uint32_t isInShadowRayMarchVoxelSceneLongestAxis(Ray localRay, const 
 	}
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+	while (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		StorageStructure* regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -630,7 +662,7 @@ __device__ uint32_t isInShadowRayMarchVoxelSceneLongestAxis(Ray localRay, const 
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
 			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
-			if (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+			if (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return false;
 		}
@@ -895,7 +927,7 @@ __device__ uint32_t rayMarchVoxelSceneLongestAxis(const Ray& originalRay, const 
 	Ray localRay = sceneRay.convertRayToLocalSpace(Vector3f(currentRegion.getX() * BLOCK_SIZE, currentRegion.getY() * BLOCK_SIZE, currentRegion.getZ() * BLOCK_SIZE), 1.0f);
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+	while (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		StorageStructure* regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -921,7 +953,7 @@ __device__ uint32_t rayMarchVoxelSceneLongestAxis(const Ray& originalRay, const 
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
 			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
-			if (isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ(), voxelScene.arrDiameter))
+			if (voxelScene.isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = voxelScene.getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return 0;
 		}
@@ -972,7 +1004,7 @@ __forceinline__ __device__ void writeColorToFramebuffer(uint32_t xPixel, uint32_
 }
 
 __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelSceneInfo* voxelSceneInfo, uint8_t* framebuffer, 
-	StorageStructure** voxelSceneStore, uint32_t arrDiameter)
+	StorageStructure** voxelSceneStore, uint32_t arrDiameter, int32_t minCoord)
 {
 	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
@@ -980,7 +1012,7 @@ __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Cam
 
 	Ray worldRay = calculateWorldRay(xPixel, yPixel, imgWidth, imgHeight, camera);
 
-	VoxelScene voxelScene(voxelSceneStore, arrDiameter);
+	VoxelScene voxelScene(voxelSceneStore, arrDiameter, minCoord);
 	//Raymarch the voxel grid and get a color back
 	uint32_t color = rayMarchVoxelScene(worldRay, voxelSceneInfo, voxelScene);
 
@@ -988,7 +1020,7 @@ __global__ void rayMarchSceneOriginal(uint32_t imgWidth, uint32_t imgHeight, Cam
 }
 
 __global__ void rayMarchSceneJumpAxis(uint32_t imgWidth, uint32_t imgHeight, Camera* camera, VoxelSceneInfo* voxelSceneInfo, uint8_t* framebuffer,
-	StorageStructure** voxelSceneStore, uint32_t arrDiameter)
+	StorageStructure** voxelSceneStore, uint32_t arrDiameter, int32_t minCoord)
 {
 	uint32_t xPixel = threadIdx.x + blockIdx.x * blockDim.x;
 	uint32_t yPixel = threadIdx.y + blockIdx.y * blockDim.y;
@@ -996,7 +1028,7 @@ __global__ void rayMarchSceneJumpAxis(uint32_t imgWidth, uint32_t imgHeight, Cam
 
 	Ray worldRay = calculateWorldRay(xPixel, yPixel, imgWidth, imgHeight, camera);
 
-	VoxelScene voxelScene(voxelSceneStore, arrDiameter);
+	VoxelScene voxelScene(voxelSceneStore, arrDiameter, minCoord);
 	//Raymarch the voxel grid and get a color back
 	uint32_t color = rayMarchVoxelSceneLongestAxis(worldRay, voxelSceneInfo, voxelScene);
 

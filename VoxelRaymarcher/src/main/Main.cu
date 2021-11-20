@@ -1,6 +1,7 @@
 ﻿#include <cuda_runtime.h>
 
 #include "../geometry/VoxelCube.cuh"
+#include "../geometry/VoxelFile.cuh"
 #include "../geometry/VoxelFunctions.cuh"
 #include "../geometry/VoxelSceneCPU.cuh"
 #include "../geometry/VoxelSphere.cuh"
@@ -21,7 +22,7 @@
 
 void setupConstantValues()
 {
-	Vector3f hostLightDirection = makeUnitVector(Vector3f(-1.0f, 1.0f, 1.0f));
+	Vector3f hostLightDirection = makeUnitVector(Vector3f(1.0f, 1.0f, 1.0f));
 	cudaMemcpyToSymbol(LIGHT_DIRECTION, &hostLightDirection, sizeof(Vector3f));
 
 	Vector3f hostLightColor = Vector3f(1.0f, 1.0f, 1.0f);
@@ -88,16 +89,18 @@ void pickCudaDevice()
 
 void populateVoxelScene(VoxelSceneCPU& voxelScene, StorageType storageType)
 {
-	VoxelSphere::generateVoxelSphere(voxelScene, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
-	VoxelSphere::generateVoxelSphere(voxelScene, 42, 42, 45, 2);
-	VoxelCube::generateVoxelCube(voxelScene, BLOCK_SIZE, BLOCK_SIZE / 2 + 5, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
+	VoxelFile::readVoxelFile(voxelScene, "scene.vox");
+	//VoxelSphere::generateVoxelSphere(voxelScene, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
+	//VoxelSphere::generateVoxelSphere(voxelScene, 42, 42, 45, 2);
+	VoxelCube::generateVoxelCube(voxelScene, -25, 5, -25, BLOCK_SIZE / 6);
+	//VoxelCube::generateVoxelCube(voxelScene, 10, 35, 29, 2);
 
 	//Takes the CPU memory stored in standard containers and writes the data to the device
 	voxelScene.generateVoxelScene(storageType);
 }
 
 void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunctions, uint32_t rayMarchFunctionID, uint32_t voxelLookupFunctionID,
-	Camera* deviceCameraPtr, VoxelSceneInfo* deviceSceneInfoPtr, uint8_t* deviceFramebufferPtr, StorageStructure** deviceScenePtr, uint32_t sceneArrayDiameter)
+	Camera* deviceCameraPtr, VoxelSceneInfo* deviceSceneInfoPtr, uint8_t* deviceFramebufferPtr, StorageStructure** deviceScenePtr, uint32_t sceneArrayDiameter, int32_t minCoord)
 {
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
@@ -108,12 +111,12 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 		if (rayMarchFunctionID == 0)
 		{
 			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr,
-				deviceScenePtr, sceneArrayDiameter);
+				deviceScenePtr, sceneArrayDiameter, minCoord);
 		}
 		else if (rayMarchFunctionID == 1)
 		{
 			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr,
-				deviceScenePtr, sceneArrayDiameter);
+				deviceScenePtr, sceneArrayDiameter, minCoord);
 		}
 	}
 	else
@@ -172,7 +175,7 @@ int main(int argc, char* argv[])
 	uint32_t height = 1080;
 	float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
 
-	Camera camera = Camera(Vector3f(0.0f, 0.0f, 0.0f), Vector3f(0.0f, 0.0f, -1.0f), Vector3f(0.0f, 1.0f, 0.0f), 90.0f, aspectRatio);
+	Camera camera = Camera(Vector3f(0.0f, 2.0f, 20.0f), Vector3f(0.0f, 0.0f, -1.0f), Vector3f(0.0f, 1.0f, 0.0f), 60.0f, aspectRatio);
 	//copy the created camera to the GPU
 	CudaDeviceMemoryJanitor<Camera> deviceCameraJanitor(&camera, "Camera Memory");
 
@@ -188,12 +191,12 @@ int main(int argc, char* argv[])
 	//Wait for the previous kernel call to finish
 	cudaDeviceSynchronize();
 	
-	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(-((float)BLOCK_SIZE / 2), -((float)BLOCK_SIZE / 2), -(float)BLOCK_SIZE));
+	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(0.0f, 0.0f, 0.0f), 10);
 	CudaDeviceMemoryJanitor<VoxelSceneInfo> deviceVoxelSceneInfoJanitor(&voxelSceneInfo, "Voxel Scene Info Memory");
 
 	//Run the raymarching kernel with the specified options and scene
 	runRaymarchingKernel(width, height, useOptimizedFunctions, rayMarchFunctionID, voxelLookupFunctionID, deviceCameraJanitor.devicePtr,
-		deviceVoxelSceneInfoJanitor.devicePtr, deviceFramebufferJanitor.devicePtr, deviceVoxelSceneJanitor.devicePtr, voxelScene.getArrayDiameter());
+		deviceVoxelSceneInfoJanitor.devicePtr, deviceFramebufferJanitor.devicePtr, deviceVoxelSceneJanitor.devicePtr, voxelScene.getArrayDiameter(), voxelScene.getMinCoord());
 
 	//Get the resulting image from the device and output it to the disk
 	writeResultingImageToDisk(width, height, deviceFramebufferJanitor.devicePtr);

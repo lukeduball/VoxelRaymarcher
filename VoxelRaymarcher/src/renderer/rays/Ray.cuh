@@ -13,7 +13,7 @@ public:
 
 	__host__ __device__ Ray convertRayToLocalSpace(Vector3f translation, uint32_t scale) const
 	{
-		return Ray(origin - (translation * static_cast<float>(scale)), direction);
+		return Ray(((origin - translation) * static_cast<float>(scale)), direction);
 	}
 
 	__host__ __device__ Ray convertRayToLongestAxisDirection(const Ray& ray, uint32_t& longestAxis, uint32_t& shortAxis1, uint32_t& shortAxis2) const
