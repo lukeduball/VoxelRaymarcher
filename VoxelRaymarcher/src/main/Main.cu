@@ -172,7 +172,10 @@ int main(int argc, char* argv[])
 
 	//Setup the command line arguments
 	if (argc <= 1)
+	{
 		std::cout << "You need to provide a voxel scale" << std::endl;
+		return 1;
+	}
 	int32_t scale = std::stoi(argv[1]);
 	int32_t voxelLookupFunctionID = processStorageTypeCmdArg(argc, argv);
 	int32_t rayMarchFunctionID = processAlgorithmCmdArg(argc, argv);
