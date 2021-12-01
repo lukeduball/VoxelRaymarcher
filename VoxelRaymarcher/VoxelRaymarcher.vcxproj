@@ -16,6 +16,7 @@
   <ItemGroup>
     <ClInclude Include="src\geometry\VoxelFile.cuh" />
     <ClInclude Include="src\geometry\VoxelSceneCPU.cuh" />
+    <ClInclude Include="src\math\Random.cuh" />
     <ClInclude Include="src\math\Vector2.cuh" />
     <ClInclude Include="src\memory\MemoryUtils.h" />
     <ClInclude Include="src\renderer\OptimizedFunctions.cuh" />

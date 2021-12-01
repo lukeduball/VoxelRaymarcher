@@ -345,7 +345,7 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
 		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
 
-	if (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 || 
+	while (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 || 
 		currentRegion.getX() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getY() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getZ() - voxelScene.minCoord > voxelScene.arrDiameter - 1)
 	{
 		int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
@@ -356,9 +356,9 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 		float tY = (nextY * BLOCK_SIZE - sceneRay.getOrigin().getY()) / sceneRay.getDirection().getY();
 		float tZ = (nextZ * BLOCK_SIZE - sceneRay.getOrigin().getZ()) / sceneRay.getDirection().getZ();
 
-		if (tX < 0.0f) tX = INFINITY;
-		if (tY < 0.0f) tY = INFINITY;
-		if (tZ < 0.0f) tZ = INFINITY;
+		if (tX <= 0.0f) tX = INFINITY;
+		if (tY <= 0.0f) tY = INFINITY;
+		if (tZ <= 0.0f) tZ = INFINITY;
 
 		float tMin = min(tX, min(tY, tZ));
 		if (tMin == INFINITY) return 0;
@@ -918,10 +918,34 @@ __device__ uint32_t rayMarchVoxelSceneLongestAxis(const Ray& originalRay, const 
 	Ray sceneRay = originalRay.convertRayToLocalSpace(sceneInfo->translationVector, sceneInfo->scale);
 
 	//determine the region coordinates of the ray
-	Vector3i currentRegion = Vector3i(static_cast<int32_t>(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE)),
-		static_cast<int32_t>(floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE)),
-		static_cast<int32_t>(floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE))
-	);
+	Vector3i currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
+		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
+		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+
+	while (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 ||
+		currentRegion.getX() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getY() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getZ() - voxelScene.minCoord > voxelScene.arrDiameter - 1)
+	{
+		int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+		int32_t nextY = sceneRay.getDirection().getY() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+		int32_t nextZ = sceneRay.getDirection().getZ() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
+
+		float tX = (nextX * BLOCK_SIZE - sceneRay.getOrigin().getX()) / sceneRay.getDirection().getX();
+		float tY = (nextY * BLOCK_SIZE - sceneRay.getOrigin().getY()) / sceneRay.getDirection().getY();
+		float tZ = (nextZ * BLOCK_SIZE - sceneRay.getOrigin().getZ()) / sceneRay.getDirection().getZ();
+
+		if (tX <= 0.0f) tX = INFINITY;
+		if (tY <= 0.0f) tY = INFINITY;
+		if (tZ <= 0.0f) tZ = INFINITY;
+
+		float tMin = min(tX, min(tY, tZ));
+		if (tMin == INFINITY) return 0;
+
+		sceneRay = Ray(sceneRay.getOrigin() + (tMin + EPSILON) * sceneRay.getDirection(), sceneRay.getDirection());
+
+		currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
+			floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
+			floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+	}
 
 	//Transform the ray into the local coordinates of the current region it is located in
 	Ray localRay = sceneRay.convertRayToLocalSpace(Vector3f(currentRegion.getX() * BLOCK_SIZE, currentRegion.getY() * BLOCK_SIZE, currentRegion.getZ() * BLOCK_SIZE), 1.0f);

@@ -6,6 +6,7 @@
 #include "../geometry/VoxelSceneCPU.cuh"
 #include "../geometry/VoxelSphere.cuh"
 
+#include "../math/Random.cuh"
 #include "../memory/MemoryUtils.h"
 
 #include "../renderer/Renderer.cuh"
@@ -16,6 +17,7 @@
 #include "../storage/CuckooHashTable.cuh"
 #include "../storage/VoxelClusterStore.cuh"
 
+#include <chrono>
 #include <string>
 
 #define DEVICE_ID 0
@@ -40,7 +42,7 @@ void setupConstantValues()
 
 int32_t processStorageTypeCmdArg(int argc, char* argv[])
 {
-	if (argc > 1 && std::strcmp(argv[1], "hashtable") == 0)
+	if (argc > 2 && std::strcmp(argv[2], "hashtable") == 0)
 	{
 		std::cout << "Storage Type: Cuckoo Hash Table" << std::endl;
 		return 1;
@@ -52,7 +54,7 @@ int32_t processStorageTypeCmdArg(int argc, char* argv[])
 
 int32_t processAlgorithmCmdArg(int argc, char* argv[])
 {
-	if (argc > 2 && std::strcmp(argv[2], "original") == 0)
+	if (argc > 3 && std::strcmp(argv[3], "original") == 0)
 	{
 		std::cout << "Raymarching Algorithm: Original" << std::endl;
 		return 1;
@@ -89,11 +91,8 @@ void pickCudaDevice()
 
 void populateVoxelScene(VoxelSceneCPU& voxelScene, StorageType storageType)
 {
+	//Read the voxel scene from the following file
 	VoxelFile::readVoxelFile(voxelScene, "scene.vox");
-	//VoxelSphere::generateVoxelSphere(voxelScene, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 6);
-	//VoxelSphere::generateVoxelSphere(voxelScene, 42, 42, 45, 2);
-	VoxelCube::generateVoxelCube(voxelScene, -25, 5, -25, BLOCK_SIZE / 6);
-	//VoxelCube::generateVoxelCube(voxelScene, 10, 35, 29, 2);
 
 	//Takes the CPU memory stored in standard containers and writes the data to the device
 	voxelScene.generateVoxelScene(storageType);
@@ -105,6 +104,9 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
 	dim3 threads(numThreads, numThreads);
+
+	//Find the starting time for the clock
+	auto startTime = std::chrono::high_resolution_clock::now();
 
 	if (!useOptimizedFunctions)
 	{
@@ -147,6 +149,10 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 	std::cout << cudaGetErrorString(err) << std::endl;
 
 	cudaDeviceSynchronize();
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+	std::cout << "Execution Time for Ray Marching Algorithm is: " << duration.count() << " microseconds" << std::endl;
 }
 
 void writeResultingImageToDisk(uint32_t width, uint32_t height, uint8_t* deviceFramebufferPtr)
@@ -162,7 +168,12 @@ void writeResultingImageToDisk(uint32_t width, uint32_t height, uint8_t* deviceF
 
 int main(int argc, char* argv[])
 {
+	Random::initialize();
+
 	//Setup the command line arguments
+	if (argc <= 1)
+		std::cout << "You need to provide a voxel scale" << std::endl;
+	int32_t scale = std::stoi(argv[1]);
 	int32_t voxelLookupFunctionID = processStorageTypeCmdArg(argc, argv);
 	int32_t rayMarchFunctionID = processAlgorithmCmdArg(argc, argv);
 	bool useOptimizedFunctions = processOptimizedCmdArg(argc, argv);
@@ -175,7 +186,7 @@ int main(int argc, char* argv[])
 	uint32_t height = 1080;
 	float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
 
-	Camera camera = Camera(Vector3f(0.0f, 2.0f, 20.0f), Vector3f(0.0f, 0.0f, -1.0f), Vector3f(0.0f, 1.0f, 0.0f), 60.0f, aspectRatio);
+	Camera camera = Camera(Vector3f(6.0f, 2.0f, 6.0f), Vector3f(0.0f, 0.0f, -1.0f), Vector3f(0.0f, 1.0f, 0.0f), 60.0f, aspectRatio);
 	//copy the created camera to the GPU
 	CudaDeviceMemoryJanitor<Camera> deviceCameraJanitor(&camera, "Camera Memory");
 
@@ -191,7 +202,7 @@ int main(int argc, char* argv[])
 	//Wait for the previous kernel call to finish
 	cudaDeviceSynchronize();
 	
-	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(0.0f, 0.0f, 0.0f), 10);
+	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(0.0f, 0.0f, 0.0f), scale);
 	CudaDeviceMemoryJanitor<VoxelSceneInfo> deviceVoxelSceneInfoJanitor(&voxelSceneInfo, "Voxel Scene Info Memory");
 
 	//Run the raymarching kernel with the specified options and scene

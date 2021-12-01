@@ -46,6 +46,8 @@ public:
 		int32_t arrayDiameter = maxCoord - minCoord + 1;
 		uint32_t arraySize = arrayDiameter * arrayDiameter * arrayDiameter;
 
+		std::cout << "There are : " << voxelSceneStorage.size() << "/" << arraySize << " regions that are filled" << std::endl;
+
 		void** hostPtrArray = static_cast<void**>(malloc(sizeof(void*) * arraySize));
 		std::memset(hostPtrArray, 0, sizeof(void*) * arraySize);
 
@@ -76,6 +78,7 @@ public:
 				break; }
 			}
 		}
+		std::cout << "Storage Structures Generated" << std::endl;
 
 		cudaMalloc(&deviceVoxelScene, sizeof(void*) * arraySize);
 		cudaMemcpy(deviceVoxelScene, hostPtrArray, sizeof(void*) * arraySize, cudaMemcpyHostToDevice);
