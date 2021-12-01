@@ -345,17 +345,19 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
 		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
 
+	//Try to place the ray in the scene's boundaries if it outside, if that is not possible quit ray marching
 	while (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 || 
 		currentRegion.getX() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getY() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getZ() - voxelScene.minCoord > voxelScene.arrDiameter - 1)
 	{
+		//Find the closest next location along the ray at the edge of the scene
 		int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
 		int32_t nextY = sceneRay.getDirection().getY() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
 		int32_t nextZ = sceneRay.getDirection().getZ() < 0.0f ? voxelScene.arrDiameter + voxelScene.minCoord : 0 + voxelScene.minCoord;
-
+		//Find the ray parameter values
 		float tX = (nextX * BLOCK_SIZE - sceneRay.getOrigin().getX()) / sceneRay.getDirection().getX();
 		float tY = (nextY * BLOCK_SIZE - sceneRay.getOrigin().getY()) / sceneRay.getDirection().getY();
 		float tZ = (nextZ * BLOCK_SIZE - sceneRay.getOrigin().getZ()) / sceneRay.getDirection().getZ();
-
+		//Ensure that negative values are excluded from the min calculation because negative values mean they are behind the ray
 		if (tX <= 0.0f) tX = INFINITY;
 		if (tY <= 0.0f) tY = INFINITY;
 		if (tZ <= 0.0f) tZ = INFINITY;
@@ -922,6 +924,7 @@ __device__ uint32_t rayMarchVoxelSceneLongestAxis(const Ray& originalRay, const 
 		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
 		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
 
+	//Try to move the ray into the scene if it is outside of it, if that is not possible quit ray marching
 	while (currentRegion.getX() - voxelScene.minCoord < 0 || currentRegion.getY() - voxelScene.minCoord < 0 || currentRegion.getZ() - voxelScene.minCoord < 0 ||
 		currentRegion.getX() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getY() - voxelScene.minCoord > voxelScene.arrDiameter - 1 || currentRegion.getZ() - voxelScene.minCoord > voxelScene.arrDiameter - 1)
 	{

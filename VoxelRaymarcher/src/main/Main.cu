@@ -22,6 +22,7 @@
 
 #define DEVICE_ID 0
 
+//Sets up the constant values that will not change during a kernel run
 void setupConstantValues()
 {
 	Vector3f hostLightDirection = makeUnitVector(Vector3f(1.0f, 1.0f, 1.0f));
@@ -40,6 +41,7 @@ void setupConstantValues()
 	cudaMemcpyToSymbol(USE_SHADOWS, &hostUseShadows, sizeof(bool));
 }
 
+//Processes the command line argument that picks the storage structure
 int32_t processStorageTypeCmdArg(int argc, char* argv[])
 {
 	if (argc > 2 && std::strcmp(argv[2], "hashtable") == 0)
@@ -52,6 +54,7 @@ int32_t processStorageTypeCmdArg(int argc, char* argv[])
 	return 0;
 }
 
+//Processes the command line argument that picks the ray marching algorithm
 int32_t processAlgorithmCmdArg(int argc, char* argv[])
 {
 	if (argc > 3 && std::strcmp(argv[3], "original") == 0)
@@ -64,6 +67,7 @@ int32_t processAlgorithmCmdArg(int argc, char* argv[])
 	return 0;
 }
 
+//Processes the command line argument that tells if the optimized functions are being used
 int32_t processOptimizedCmdArg(int argc, char* argv[])
 {
 	if (argc > 3 && std::strcmp(argv[3], "optimized") == 0)
@@ -101,6 +105,7 @@ void populateVoxelScene(VoxelSceneCPU& voxelScene, StorageType storageType)
 void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunctions, uint32_t rayMarchFunctionID, uint32_t voxelLookupFunctionID,
 	Camera* deviceCameraPtr, VoxelSceneInfo* deviceSceneInfoPtr, uint8_t* deviceFramebufferPtr, StorageStructure** deviceScenePtr, uint32_t sceneArrayDiameter, int32_t minCoord)
 {
+	//Sets up the number of threads and blocks that are run on the GPU
 	uint32_t numThreads = 8;
 	dim3 blocks(width / numThreads + 1, height / numThreads + 1);
 	dim3 threads(numThreads, numThreads);
@@ -110,6 +115,7 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 
 	if (!useOptimizedFunctions)
 	{
+		//Run the ray marching kernel
 		if (rayMarchFunctionID == 0)
 		{
 			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr,
@@ -148,6 +154,7 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 	cudaError_t err = cudaPeekAtLastError();
 	std::cout << cudaGetErrorString(err) << std::endl;
 
+	//Wait until the ray marching kernel has completed on the GPU
 	cudaDeviceSynchronize();
 
 	auto endTime = std::chrono::high_resolution_clock::now();

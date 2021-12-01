@@ -15,6 +15,7 @@ class VoxelSceneCPU
 public:
 	void insertVoxel(int32_t x, int32_t y, int32_t z, uint32_t color)
 	{
+		//Find the region ID
 		int32_t voxelStructureIDX = std::floorf(x / (float)BLOCK_SIZE);
 		int32_t voxelStructureIDY = std::floorf(y / (float)BLOCK_SIZE);
 		int32_t voxelStructureIDZ = std::floorf(z / (float)BLOCK_SIZE);
@@ -27,20 +28,24 @@ public:
 		int32_t minVoxelRegionCoord = std::min(voxelStructureIDX, std::min(voxelStructureIDY, voxelStructureIDZ));
 		int32_t maxVoxelRegionCoord = std::max(voxelStructureIDX, std::max(voxelStructureIDY, voxelStructureIDZ));
 
+		//Set the minimum and maximum coordinates if they are larger then the previous min and max
 		if (minVoxelRegionCoord < minCoord)
 			minCoord = minVoxelRegionCoord;
 		if (maxVoxelRegionCoord > maxCoord)
 			maxCoord = maxVoxelRegionCoord;
 
 
+		//Check if the region is already added to the map and create the map for that region if it has not
 		Vector3i storageKey = Vector3i(voxelStructureIDX, voxelStructureIDY, voxelStructureIDZ);
 		if (voxelSceneStorage.find(storageKey) == voxelSceneStorage.end())
 		{
 			voxelSceneStorage[storageKey] = std::unordered_map<uint32_t, uint32_t>();
 		}
+		//Place the voxel in the voxel map of the region
 		voxelSceneStorage[storageKey][voxelfunc::generate3DPoint(localVoxelX, localVoxelY, localVoxelZ)] = color;
 	}
 
+	//Generate the voxel scene and copy it to the GPU
 	void generateVoxelScene(StorageType storageType)
 	{
 		int32_t arrayDiameter = maxCoord - minCoord + 1;
@@ -80,6 +85,7 @@ public:
 		}
 		std::cout << "Storage Structures Generated" << std::endl;
 
+		//Copy the region table to the GPU
 		cudaMalloc(&deviceVoxelScene, sizeof(void*) * arraySize);
 		cudaMemcpy(deviceVoxelScene, hostPtrArray, sizeof(void*) * arraySize, cudaMemcpyHostToDevice);
 
