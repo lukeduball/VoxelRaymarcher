@@ -8,7 +8,7 @@ class CudaMemoryUtils
 public:
 	static void ManagedCudaFree(void* devicePtr, std::string memoryDescription)
 	{
-		std::cout << "Freeing CUDA Memory (Manual): " << memoryDescription;
+		std::cout << "Freeing CUDA Memory (Manual): " << memoryDescription << std::endl;
 		cudaFree(devicePtr);
 	}
 };

@@ -46,48 +46,34 @@ public:
 	}
 
 	//Generate the voxel scene and copy it to the GPU
-	void generateVoxelScene(StorageType storageType)
+	void generateVoxelScene()
 	{
 		int32_t arrayDiameter = maxCoord - minCoord + 1;
 		uint32_t arraySize = arrayDiameter * arrayDiameter * arrayDiameter;
 
 		std::cout << "There are : " << voxelSceneStorage.size() << "/" << arraySize << " regions that are filled" << std::endl;
 
-		void** hostPtrArray = static_cast<void**>(malloc(sizeof(void*) * arraySize));
-		std::memset(hostPtrArray, 0, sizeof(void*) * arraySize);
+		VoxelClusterStore** hostPtrArray = static_cast<VoxelClusterStore**>(malloc(sizeof(VoxelClusterStore*) * arraySize));
+		std::memset(hostPtrArray, 0, sizeof(VoxelClusterStore*) * arraySize);
 
 		for (std::pair<Vector3i, std::unordered_map<uint32_t, uint32_t>> pair : voxelSceneStorage)
 		{
 			Vector3i arrayLocation = pair.first - Vector3i(minCoord, minCoord, minCoord);
 			uint32_t arrayIndex = arrayLocation.getX() + arrayLocation.getY() * arrayDiameter + arrayLocation.getZ() * arrayDiameter * arrayDiameter;
 
-			switch (storageType)
-			{
-			case StorageType::VOXEL_CLUSTER_STORE: {
-				//Generate the voxel cluster store on the CPU
-				VoxelClusterStore* voxelClusterStore = new VoxelClusterStore(pair.second);
-				VoxelClusterStore* devicePtr;
-				//Move the voxel cluster store to the GPU
-				cudaMalloc(&devicePtr, sizeof(VoxelClusterStore));
-				cudaMemcpy(devicePtr, voxelClusterStore, sizeof(VoxelClusterStore), cudaMemcpyHostToDevice);
-				hostPtrArray[arrayIndex] = devicePtr;
-				break; }
-			case StorageType::HASH_TABLE: {
-				//Generate the voxel cluster store on the CPU
-				CuckooHashTable* hashTable = new CuckooHashTable(pair.second);
-				CuckooHashTable* devicePtr;
-				//Move the voxel cluster store to the GPU
-				cudaMalloc(&devicePtr, sizeof(CuckooHashTable));
-				cudaMemcpy(devicePtr, hashTable, sizeof(CuckooHashTable), cudaMemcpyHostToDevice);
-				hostPtrArray[arrayIndex] = devicePtr;
-				break; }
-			}
+			//Generate the voxel cluster store on the CPU
+			VoxelClusterStore* voxelClusterStore = new VoxelClusterStore(pair.second);
+			VoxelClusterStore* devicePtr;
+			//Move the voxel cluster store to the GPU
+			cudaMalloc(&devicePtr, sizeof(VoxelClusterStore));
+			cudaMemcpy(devicePtr, voxelClusterStore, sizeof(VoxelClusterStore), cudaMemcpyHostToDevice);
+			hostPtrArray[arrayIndex] = devicePtr;
 		}
 		std::cout << "Storage Structures Generated" << std::endl;
 
 		//Copy the region table to the GPU
-		cudaMalloc(&deviceVoxelScene, sizeof(void*) * arraySize);
-		cudaMemcpy(deviceVoxelScene, hostPtrArray, sizeof(void*) * arraySize, cudaMemcpyHostToDevice);
+		cudaMalloc(&deviceVoxelScene, sizeof(VoxelClusterStore*) * arraySize);
+		cudaMemcpy(deviceVoxelScene, hostPtrArray, sizeof(VoxelClusterStore*) * arraySize, cudaMemcpyHostToDevice);
 
 		free(hostPtrArray);
 	}
@@ -120,7 +106,7 @@ public:
 		return minCoord;
 	}
 
-	void** deviceVoxelScene;
+	VoxelClusterStore** deviceVoxelScene;
 
 private:
 	//Map will be converted to an array of VoxelStructures which contain the actual voxels

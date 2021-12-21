@@ -10,7 +10,6 @@
 #include "../memory/MemoryUtils.h"
 
 #include "../renderer/Renderer.cuh"
-//#include "../renderer/OptimizedFunctions.cuh"
 #include "../renderer/images/ImageWriter.h"
 #include "../renderer/camera/Camera.cuh"
 
@@ -41,44 +40,6 @@ void setupConstantValues()
 	cudaMemcpyToSymbol(USE_SHADOWS, &hostUseShadows, sizeof(bool));
 }
 
-//Processes the command line argument that picks the storage structure
-int32_t processStorageTypeCmdArg(int argc, char* argv[])
-{
-	if (argc > 2 && std::strcmp(argv[2], "hashtable") == 0)
-	{
-		std::cout << "Storage Type: Cuckoo Hash Table" << std::endl;
-		return 1;
-	}
-
-	std::cout << "Storage Type: Voxel Cluster Storage" << std::endl;
-	return 0;
-}
-
-//Processes the command line argument that picks the ray marching algorithm
-int32_t processAlgorithmCmdArg(int argc, char* argv[])
-{
-	if (argc > 3 && std::strcmp(argv[3], "original") == 0)
-	{
-		std::cout << "Raymarching Algorithm: Original" << std::endl;
-		return 1;
-	}
-
-	std::cout << "Raymarching Algorithm: Longest Axis" << std::endl;
-	return 0;
-}
-
-//Processes the command line argument that tells if the optimized functions are being used
-int32_t processOptimizedCmdArg(int argc, char* argv[])
-{
-	if (argc > 3 && std::strcmp(argv[3], "optimized") == 0)
-	{
-		std::cout << "Running Optimized Functions" << std::endl;
-		return true;
-	}
-
-	return false;
-}
-
 void pickCudaDevice()
 {
 	int devCount;
@@ -93,17 +54,16 @@ void pickCudaDevice()
 	printf("Device: %s\n", devProp.name);
 }
 
-void populateVoxelScene(VoxelSceneCPU& voxelScene, StorageType storageType)
+void populateVoxelScene(VoxelSceneCPU& voxelScene)
 {
 	//Read the voxel scene from the following file
 	VoxelFile::readVoxelFile(voxelScene, "scene.vox");
 
 	//Takes the CPU memory stored in standard containers and writes the data to the device
-	voxelScene.generateVoxelScene(storageType);
+	voxelScene.generateVoxelScene();
 }
 
-void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunctions, uint32_t rayMarchFunctionID, uint32_t voxelLookupFunctionID,
-	Camera* deviceCameraPtr, VoxelSceneInfo* deviceSceneInfoPtr, uint8_t* deviceFramebufferPtr, StorageStructure** deviceScenePtr, uint32_t sceneArrayDiameter, int32_t minCoord)
+void runRaymarchingKernel(uint32_t width, uint32_t height, Camera* deviceCameraPtr, VoxelSceneInfo* deviceSceneInfoPtr, uint8_t* deviceFramebufferPtr)
 {
 	//Sets up the number of threads and blocks that are run on the GPU
 	uint32_t numThreads = 8;
@@ -113,44 +73,8 @@ void runRaymarchingKernel(uint32_t width, uint32_t height, bool useOptimizedFunc
 	//Find the starting time for the clock
 	auto startTime = std::chrono::high_resolution_clock::now();
 
-	if (!useOptimizedFunctions)
-	{
-		//Run the ray marching kernel
-		if (rayMarchFunctionID == 0)
-		{
-			rayMarchSceneJumpAxis << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr,
-				deviceScenePtr, sceneArrayDiameter, minCoord);
-		}
-		else if (rayMarchFunctionID == 1)
-		{
-			rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr,
-				deviceScenePtr, sceneArrayDiameter, minCoord);
-		}
-	}
-	else
-	{
-		std::cout << "Optimized functions are currently disabled" << std::endl;
-		//Jump Axis with VCS
-		if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 0)
-		{
-			//rayMarchSceneJumpAxisVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
-		}
-		//Original with VCS
-		else if (rayMarchFunctionID == 1 && voxelLookupFunctionID == 0)
-		{
-			//rayMarchSceneOriginalVCS << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceVoxelClusterStore);
-		}
-		//Jump Axis with Cuckoo Hash Table
-		else if (rayMarchFunctionID == 0 && voxelLookupFunctionID == 1)
-		{
-			//rayMarchSceneJumpAxisHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
-		}
-		//Original with Cuckoo Hash Table
-		else
-		{
-			//rayMarchSceneOriginalHashTable << <blocks, threads >> > (width, height, deviceCamera, deviceVoxelStructure, deviceFramebuffer, deviceHashTable);
-		}
-	}
+	rayMarchSceneOriginal << <blocks, threads >> > (width, height, deviceCameraPtr, deviceSceneInfoPtr, deviceFramebufferPtr);
+	
 	cudaError_t err = cudaPeekAtLastError();
 	std::cout << cudaGetErrorString(err) << std::endl;
 
@@ -184,9 +108,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	int32_t scale = std::stoi(argv[1]);
-	int32_t voxelLookupFunctionID = processStorageTypeCmdArg(argc, argv);
-	int32_t rayMarchFunctionID = processAlgorithmCmdArg(argc, argv);
-	bool useOptimizedFunctions = processOptimizedCmdArg(argc, argv);
 
 	pickCudaDevice();
 	//Pass values that won't change during a kernel call to the GPU
@@ -205,19 +126,13 @@ int main(int argc, char* argv[])
 
 	VoxelSceneCPU voxelScene;
 	//Populate the passed Voxel Scene with voxel data
-	populateVoxelScene(voxelScene, StorageType(voxelLookupFunctionID));
-	CudaDeviceMemoryJanitor<StorageStructure*> deviceVoxelSceneJanitor(voxelScene.getArraySize(), "Voxel Scene Memory (table of pointers into region's storage structure)");
-	//Kernel call to populate the voxel scene on the device. This call needs to happen because it creates virtual classes which need to be made on the device
-	generateVoxelScene<<<1, 1>>>(deviceVoxelSceneJanitor.devicePtr, voxelScene.deviceVoxelScene, voxelScene.getArraySize(), StorageType(voxelLookupFunctionID));
-	//Wait for the previous kernel call to finish
-	cudaDeviceSynchronize();
+	populateVoxelScene(voxelScene);
 	
-	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(Vector3f(0.0f, 0.0f, 0.0f), scale);
+	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(voxelScene.deviceVoxelScene, voxelScene.getArrayDiameter(), voxelScene.getMinCoord(), Vector3f(0.0f, 0.0f, 0.0f), scale);
 	CudaDeviceMemoryJanitor<VoxelSceneInfo> deviceVoxelSceneInfoJanitor(&voxelSceneInfo, "Voxel Scene Info Memory");
 
 	//Run the raymarching kernel with the specified options and scene
-	runRaymarchingKernel(width, height, useOptimizedFunctions, rayMarchFunctionID, voxelLookupFunctionID, deviceCameraJanitor.devicePtr,
-		deviceVoxelSceneInfoJanitor.devicePtr, deviceFramebufferJanitor.devicePtr, deviceVoxelSceneJanitor.devicePtr, voxelScene.getArrayDiameter(), voxelScene.getMinCoord());
+	runRaymarchingKernel(width, height, deviceCameraJanitor.devicePtr, deviceVoxelSceneInfoJanitor.devicePtr, deviceFramebufferJanitor.devicePtr);
 
 	//Get the resulting image from the device and output it to the disk
 	writeResultingImageToDisk(width, height, deviceFramebufferJanitor.devicePtr);

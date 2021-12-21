@@ -19,8 +19,6 @@
 constexpr float EPSILON = 0.0001f;
 __constant__ const uint32_t EMPTY_KEY = 1 << 30;
 __constant__ const uint32_t EMPTY_VAL = 1 << 30;
-__constant__ const uint32_t FINISH_VAL = EMPTY_VAL + 1;
-__constant__ const uint32_t CONTINUE_VAL = EMPTY_VAL + 2;
 __constant__ const int32_t BLOCK_SIZE = 64;
 __constant__ const int32_t CLUSTER_SIZE = 8;
 
@@ -33,8 +31,6 @@ __constant__ const float LIGHT_QUADRATIC = 0.0075f;
 
 __constant__ bool USE_POINT_LIGHT = false;
 __constant__ bool USE_SHADOWS = false;
-
-enum class StorageType {VOXEL_CLUSTER_STORE, HASH_TABLE};
 
 namespace voxelfunc
 {
