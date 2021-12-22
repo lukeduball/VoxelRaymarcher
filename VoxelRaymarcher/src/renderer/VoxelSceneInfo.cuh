@@ -13,28 +13,21 @@ public:
 
 	__device__ __forceinline__ VoxelClusterStore* getRegionStorageStructure(int32_t x, int32_t y, int32_t z) const
 	{
-		uint32_t uX = x - minCoord;
-		uint32_t uY = y - minCoord;
-		uint32_t uZ = z - minCoord;
+		uint32_t uX = x - 1 - minCoord;
+		uint32_t uY = y - 1 - minCoord;
+		uint32_t uZ = z - 1 - minCoord;
 		ASSERT(uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter, "");
 		return sceneStorage[uX + uY * arrDiameter + uZ * arrDiameter * arrDiameter];
 	}
 
-	__device__ __forceinline__ bool isRayInScene(int32_t x, int32_t y, int32_t z) const
+	__device__ __forceinline__ bool isRegionInScene(int32_t regionX, int32_t regionY, int32_t regionZ) const
 	{
-		uint32_t uX = x - minCoord;
-		uint32_t uY = y - minCoord;
-		uint32_t uZ = z - minCoord;
+		uint32_t uX = regionX - 1 - minCoord;
+		uint32_t uY = regionY - 1 - minCoord;
+		uint32_t uZ = regionZ - 1 - minCoord;
 		return uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter;
 	}
 
-	__device__ __forceinline__ bool isRegionInScene(int32_t regionX, int32_t regionY, int32_t regionZ)
-	{
-		int32_t x = regionX - minCoord;
-		int32_t y = regionY - minCoord;
-		int32_t z = regionZ - minCoord;
-		return x > 0 && y > 0 && z > 0 && x < arrDiameter && y < arrDiameter && z < arrDiameter;
-	}
 
 	Vector3f translationVector;
 	uint32_t scale;

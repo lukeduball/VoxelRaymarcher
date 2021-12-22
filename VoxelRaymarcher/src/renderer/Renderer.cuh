@@ -152,7 +152,7 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 	}
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (sceneInfo->isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
+	while (sceneInfo->isRegionInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		VoxelClusterStore* regionStorageStructure = sceneInfo->getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -169,22 +169,22 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 
 			localRay = Ray(localRay.getOrigin() + tMin * localRay.getDirection(), localRay.getDirection());
 			//Find the difference of the next region coordinates based on the processed ray from the previous ray marching algorithm
-			int32_t regionXDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getX() / BLOCK_SIZE));
-			int32_t regionYDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getY() / BLOCK_SIZE));
-			int32_t regionZDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getZ() / BLOCK_SIZE));
+			int32_t regionXDiff = static_cast<int32_t>(localRay.getOrigin().getX() / BLOCK_SIZE + 1) - 1;
+			int32_t regionYDiff = static_cast<int32_t>(localRay.getOrigin().getY() / BLOCK_SIZE + 1) - 1;
+			int32_t regionZDiff = static_cast<int32_t>(localRay.getOrigin().getZ() / BLOCK_SIZE + 1) - 1;
 			//Update the region coordiantes to indicate the current region
 			currentRegion[0] += regionXDiff;
 			currentRegion[1] += regionYDiff;
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
-			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * static_cast<int32_t>(BLOCK_SIZE), regionYDiff * static_cast<int32_t>(BLOCK_SIZE), regionZDiff * static_cast<int32_t>(BLOCK_SIZE)), 1.0f);
-			if (sceneInfo->isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
+			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
+			if (sceneInfo->isRegionInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = sceneInfo->getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return false;
 		}
 
 		//Vector is passed along for lighting calculations
-		Vector3f regionWorldPosition = sceneInfo->translationVector + Vector3f(currentRegion.getX() * BLOCK_SIZE, currentRegion.getY() * BLOCK_SIZE, currentRegion.getZ() * BLOCK_SIZE);
+		Vector3f regionWorldPosition = sceneInfo->translationVector + Vector3f( (currentRegion.getX() - 1) * BLOCK_SIZE, (currentRegion.getY() - 1) * BLOCK_SIZE, (currentRegion.getZ() - 1) * BLOCK_SIZE);
 		//call the raymarching function for that voxel structure
 		uint32_t voxelColor = shadowRayMarchVoxelGrid(localRay, regionWorldPosition, regionStorageStructure);
 		if (voxelColor != EMPTY_VAL)
@@ -192,15 +192,15 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 			return true;
 		}
 		//Find the difference of the next region coordinates based on the processed ray from the previous ray marching algorithm
-		int32_t regionXDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getX() / BLOCK_SIZE));
-		int32_t regionYDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getY() / BLOCK_SIZE));
-		int32_t regionZDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getZ() / BLOCK_SIZE));
+		int32_t regionXDiff = static_cast<int32_t>(localRay.getOrigin().getX() / BLOCK_SIZE + 1) - 1;
+		int32_t regionYDiff = static_cast<int32_t>(localRay.getOrigin().getY() / BLOCK_SIZE + 1) - 1;
+		int32_t regionZDiff = static_cast<int32_t>(localRay.getOrigin().getZ() / BLOCK_SIZE + 1) - 1;
 		//Update the region coordiantes to indicate the current region
 		currentRegion[0] += regionXDiff;
 		currentRegion[1] += regionYDiff;
 		currentRegion[2] += regionZDiff;
 		//Update the localRay to be in the space of the new region
-		localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * static_cast<int32_t>(BLOCK_SIZE), regionYDiff * static_cast<int32_t>(BLOCK_SIZE), regionZDiff * static_cast<int32_t>(BLOCK_SIZE)), 1.0f);
+		localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
 	}
 
 	//Return the background color
@@ -314,13 +314,12 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 	Ray sceneRay = originalRay.convertRayToLocalSpace(sceneInfo->translationVector, sceneInfo->scale);
 
 	//determine the region coordinates of the ray
-	Vector3i currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
-		floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
-		floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+	Vector3i currentRegion = Vector3i(static_cast<int32_t>(sceneRay.getOrigin().getX() / BLOCK_SIZE + 1),
+		static_cast<int32_t>(sceneRay.getOrigin().getY() / BLOCK_SIZE + 1),
+		static_cast<int32_t>(sceneRay.getOrigin().getZ() / BLOCK_SIZE + 1));
 
 	//Try to place the ray in the scene's boundaries if it outside, if that is not possible quit ray marching
-	while (currentRegion.getX() - sceneInfo->minCoord < 0 || currentRegion.getY() - sceneInfo->minCoord < 0 || currentRegion.getZ() - sceneInfo->minCoord < 0 || 
-		currentRegion.getX() - sceneInfo->minCoord > sceneInfo->arrDiameter - 1 || currentRegion.getY() - sceneInfo->minCoord > sceneInfo->arrDiameter - 1 || currentRegion.getZ() - sceneInfo->minCoord > sceneInfo->arrDiameter - 1)
+	while (!sceneInfo->isRegionInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		//Find the closest next location along the ray at the edge of the scene
 		int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? sceneInfo->arrDiameter + sceneInfo->minCoord : 0 + sceneInfo->minCoord;
@@ -340,18 +339,18 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 
 		sceneRay = Ray(sceneRay.getOrigin() + (tMin + EPSILON) * sceneRay.getDirection(), sceneRay.getDirection());
 
-		currentRegion = Vector3i(floorf(sceneRay.getOrigin().getX() / BLOCK_SIZE),
-			floorf(sceneRay.getOrigin().getY() / BLOCK_SIZE),
-			floorf(sceneRay.getOrigin().getZ() / BLOCK_SIZE));
+		currentRegion = Vector3i(static_cast<int32_t>(sceneRay.getOrigin().getX() / BLOCK_SIZE + 1),
+			static_cast<int32_t>(sceneRay.getOrigin().getY() / BLOCK_SIZE + 1),
+			static_cast<int32_t>(sceneRay.getOrigin().getZ() / BLOCK_SIZE + 1));
 	}
 
 	//Transform the ray into the local coordinates of the current region it is located in
 	Ray localRay = sceneRay.convertRayToLocalSpace(
-		Vector3f(currentRegion.getX() * BLOCK_SIZE, currentRegion.getY() * BLOCK_SIZE, currentRegion.getZ() * BLOCK_SIZE), 1.0f
+		Vector3f( (currentRegion.getX() - 1) * BLOCK_SIZE, (currentRegion.getY() - 1) * BLOCK_SIZE, (currentRegion.getZ() - 1) * BLOCK_SIZE), 1.0f
 	);
 
 	//while the region coordinates are within the bounds of the scene, keep doing calculation
-	while (sceneInfo->isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
+	while (sceneInfo->isRegionInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 	{
 		VoxelClusterStore* regionStorageStructure = sceneInfo->getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 		while (regionStorageStructure == nullptr)
@@ -368,22 +367,22 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 
 			localRay = Ray(localRay.getOrigin() + tMin * localRay.getDirection(), localRay.getDirection());
 			//Find the difference of the next region coordinates based on the processed ray from the previous ray marching algorithm
-			int32_t regionXDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getX() / BLOCK_SIZE));
-			int32_t regionYDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getY() / BLOCK_SIZE));
-			int32_t regionZDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getZ() / BLOCK_SIZE));
+			int32_t regionXDiff = static_cast<int32_t>(localRay.getOrigin().getX() / BLOCK_SIZE + 1) - 1;
+			int32_t regionYDiff = static_cast<int32_t>(localRay.getOrigin().getY() / BLOCK_SIZE + 1) - 1;
+			int32_t regionZDiff = static_cast<int32_t>(localRay.getOrigin().getZ() / BLOCK_SIZE + 1) - 1;
 			//Update the region coordiantes to indicate the current region
 			currentRegion[0] += regionXDiff;
 			currentRegion[1] += regionYDiff;
 			currentRegion[2] += regionZDiff;
 			//Update the localRay to be in the space of the new region
 			localRay = localRay.convertRayToLocalSpace(Vector3f(regionXDiff * BLOCK_SIZE, regionYDiff * BLOCK_SIZE, regionZDiff * BLOCK_SIZE), 1.0f);
-			if (sceneInfo->isRayInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
+			if (sceneInfo->isRegionInScene(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ()))
 				regionStorageStructure = sceneInfo->getRegionStorageStructure(currentRegion.getX(), currentRegion.getY(), currentRegion.getZ());
 			else return 0;
 		}
 
 		//Vector is passed along for lighting calculations
-		Vector3f regionWorldPosition = sceneInfo->translationVector + Vector3f(currentRegion.getX() * BLOCK_SIZE, currentRegion.getY() * BLOCK_SIZE, currentRegion.getZ() * BLOCK_SIZE);
+		Vector3f regionWorldPosition = sceneInfo->translationVector + Vector3f( (currentRegion.getX() - 1) * BLOCK_SIZE, (currentRegion.getY() - 1) * BLOCK_SIZE, (currentRegion.getZ() - 1) * BLOCK_SIZE);
 		//call the raymarching function for that voxel structure
 		uint32_t voxelColor = rayMarchVoxelGrid(localRay, regionWorldPosition, regionStorageStructure, sceneInfo, currentRegion);
 		if (voxelColor != EMPTY_VAL)
@@ -391,9 +390,9 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 			return voxelColor;
 		}
 		//Find the difference of the next region coordinates based on the processed ray from the previous ray marching algorithm
-		int32_t regionXDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getX() / BLOCK_SIZE));
-		int32_t regionYDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getY() / BLOCK_SIZE));
-		int32_t regionZDiff = static_cast<int32_t>(floorf(localRay.getOrigin().getZ() / BLOCK_SIZE));
+		int32_t regionXDiff = static_cast<int32_t>(localRay.getOrigin().getX() / BLOCK_SIZE + 1) - 1;
+		int32_t regionYDiff = static_cast<int32_t>(localRay.getOrigin().getY() / BLOCK_SIZE + 1) - 1;
+		int32_t regionZDiff = static_cast<int32_t>(localRay.getOrigin().getZ() / BLOCK_SIZE + 1) - 1;
 		//Update the region coordiantes to indicate the current region
 		currentRegion[0] += regionXDiff;
 		currentRegion[1] += regionYDiff;
