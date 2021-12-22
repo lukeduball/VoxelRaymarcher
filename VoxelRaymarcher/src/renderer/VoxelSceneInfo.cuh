@@ -16,7 +16,7 @@ public:
 		uint32_t uX = x - minCoord;
 		uint32_t uY = y - minCoord;
 		uint32_t uZ = z - minCoord;
-		ASSERT(uX < arrDiameter&& uY < arrDiameter&& uZ < arrDiameter, "");
+		ASSERT(uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter, "");
 		return sceneStorage[uX + uY * arrDiameter + uZ * arrDiameter * arrDiameter];
 	}
 
@@ -25,7 +25,15 @@ public:
 		uint32_t uX = x - minCoord;
 		uint32_t uY = y - minCoord;
 		uint32_t uZ = z - minCoord;
-		return uX < arrDiameter&& uY < arrDiameter&& uZ < arrDiameter;
+		return uX < arrDiameter && uY < arrDiameter && uZ < arrDiameter;
+	}
+
+	__device__ __forceinline__ bool isRegionInScene(int32_t regionX, int32_t regionY, int32_t regionZ)
+	{
+		int32_t x = regionX - minCoord;
+		int32_t y = regionY - minCoord;
+		int32_t z = regionZ - minCoord;
+		return x > 0 && y > 0 && z > 0 && x < arrDiameter && y < arrDiameter && z < arrDiameter;
 	}
 
 	Vector3f translationVector;
