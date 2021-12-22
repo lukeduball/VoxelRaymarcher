@@ -77,4 +77,14 @@ namespace voxelfunc
 		uint32_t b = static_cast<uint32_t>(colorVec.getZ() * 255.0f);
 		return generateRGBColor(r, g, b);
 	}
+
+	__host__ __device__ __forceinline__ float floorFloatWithIntegers(float f)
+	{
+		return static_cast<float>(static_cast<int32_t>(f));
+	}
+
+	__host__ __device__ __forceinline__ float ceilFloatWithIntegers(float f)
+	{
+		return static_cast<float>(static_cast<int32_t>(f) + 1);
+	}
 }

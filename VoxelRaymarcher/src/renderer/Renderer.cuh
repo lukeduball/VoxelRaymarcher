@@ -70,6 +70,40 @@ __device__ __forceinline__ bool isRayInRegion(const Ray& ray)
 		ray.getOrigin().getZ() >= 0.0f && ray.getOrigin().getZ() < BLOCK_SIZE;
 }
 
+__device__ Ray calculateNextRayPosition(const Ray& currentRay, float (*nextXFunc)(float), float (*nextYFunc)(float), float (*nextZFunc)(float))
+{
+	//Calculate the next voxel locations
+
+	float nextX = nextXFunc(currentRay.getOrigin().getX());
+	float nextY = nextYFunc(currentRay.getOrigin().getY());
+	float nextZ = nextZFunc(currentRay.getOrigin().getZ());
+	//Calculate the t-values along the ray
+	float tX = currentRay.getDirection().getX() != 0.0f ? (nextX - currentRay.getOrigin().getX()) / currentRay.getDirection().getX() : INFINITY;
+	float tY = currentRay.getDirection().getY() != 0.0f ? (nextY - currentRay.getOrigin().getY()) / currentRay.getDirection().getY() : INFINITY;
+	float tZ = currentRay.getDirection().getZ() != 0.0f ? (nextZ - currentRay.getOrigin().getZ()) / currentRay.getDirection().getZ() : INFINITY;
+	//Find the minimum t-value
+	float tMin = min(tX, min(tY, tZ));
+
+	//Create the ray at the next position
+	return Ray(currentRay.getOrigin() + (tMin + EPSILON) * currentRay.getDirection(), currentRay.getDirection());
+}
+
+__device__ Ray calculateNextRayPositionForCluster(const Ray& currentRay, int32_t voxelX, int32_t voxelY, int32_t voxelZ)
+{
+	//Skip to the next block location
+	int32_t nextX = currentRay.getDirection().getX() > 0.0f ? ((voxelX / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelX / CLUSTER_SIZE) * CLUSTER_SIZE;
+	int32_t nextY = currentRay.getDirection().getY() > 0.0f ? ((voxelY / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelY / CLUSTER_SIZE) * CLUSTER_SIZE;
+	int32_t nextZ = currentRay.getDirection().getZ() > 0.0f ? ((voxelZ / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelZ / CLUSTER_SIZE) * CLUSTER_SIZE;
+	//Calculate the t-values along the ray
+	float tX = currentRay.getDirection().getX() != 0.0f ? (nextX - currentRay.getOrigin().getX()) / currentRay.getDirection().getX() : INFINITY;
+	float tY = currentRay.getDirection().getY() != 0.0f ? (nextY - currentRay.getOrigin().getY()) / currentRay.getDirection().getY() : INFINITY;
+	float tZ = currentRay.getDirection().getZ() != 0.0f ? (nextZ - currentRay.getOrigin().getZ()) / currentRay.getDirection().getZ() : INFINITY;
+	//Find the minimum t-value
+	float tMin = min(tX, min(tY, tZ));
+
+	return  Ray(currentRay.getOrigin() + (tMin + EPSILON) * currentRay.getDirection(), currentRay.getDirection());
+}
+
 __device__ uint32_t shadowRayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPosition, VoxelClusterStore* storageStructure)
 {
 	//Calculate once outside of the loop to increase performance
@@ -77,20 +111,8 @@ __device__ uint32_t shadowRayMarchVoxelGrid(Ray& ray, const Vector3f regionWorld
 	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 
-	//Calculate the next voxel location
-
-	float nextX = nextXFunc(ray.getOrigin().getX());
-	float nextY = nextYFunc(ray.getOrigin().getY());
-	float nextZ = nextZFunc(ray.getOrigin().getZ());
-	//Calculate the t-values along the ray
-	float tX = ray.getDirection().getX() != 0.0f ? (nextX - ray.getOrigin().getX()) / ray.getDirection().getX() : INFINITY;
-	float tY = ray.getDirection().getY() != 0.0f ? (nextY - ray.getOrigin().getY()) / ray.getDirection().getY() : INFINITY;
-	float tZ = ray.getDirection().getZ() != 0.0f ? (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ() : INFINITY;
-	//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-	float tMin = min(tX, min(tY, tZ));
-
 	//Create the ray at the next position
-	ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+	ray = calculateNextRayPosition(ray, nextXFunc, nextYFunc, nextZFunc);
 
 	while (isRayInRegion(ray))
 	{
@@ -102,19 +124,8 @@ __device__ uint32_t shadowRayMarchVoxelGrid(Ray& ray, const Vector3f regionWorld
 		//Checks if a "voxel space" exists and moves the ray until it is in a valid voxel space (i.e. if a Voxel Cluster does not exist, skip to the next cluster)
 		if (!storageStructure->doesClusterExist(voxelX, voxelY, voxelZ))
 		{
-			//Skip to the next block location
-			int32_t nextX = ray.getDirection().getX() > 0.0f ? ((voxelX / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelX / CLUSTER_SIZE) * CLUSTER_SIZE;
-			int32_t nextY = ray.getDirection().getY() > 0.0f ? ((voxelY / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelY / CLUSTER_SIZE) * CLUSTER_SIZE;
-			int32_t nextZ = ray.getDirection().getZ() > 0.0f ? ((voxelZ / CLUSTER_SIZE) + 1) * CLUSTER_SIZE : (voxelZ / CLUSTER_SIZE) * CLUSTER_SIZE;
-			//Calculate the t-values along the ray
-			float tX = ray.getDirection().getX() != 0.0f ? (nextX - ray.getOrigin().getX()) / ray.getDirection().getX() : INFINITY;
-			float tY = ray.getDirection().getY() != 0.0f ? (nextY - ray.getOrigin().getY()) / ray.getDirection().getY() : INFINITY;
-			float tZ = ray.getDirection().getZ() != 0.0f ? (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ() : INFINITY;
-			//Find the minimum t-value
-			float tMin = min(tX, min(tY, tZ));
-
 			//Create the ray at the next position
-			ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+			ray = calculateNextRayPositionForCluster(ray, voxelX, voxelY, voxelZ);
 			continue;
 		}
 		//Check if a voxel exists at the given voxel space
@@ -124,20 +135,8 @@ __device__ uint32_t shadowRayMarchVoxelGrid(Ray& ray, const Vector3f regionWorld
 			return voxelColor;
 		}
 
-		//Calculate the next voxel location
-
-		nextX = nextXFunc(ray.getOrigin().getX());
-		nextY = nextYFunc(ray.getOrigin().getY());
-		nextZ = nextZFunc(ray.getOrigin().getZ());
-		//Calculate the t-values along the ray
-		float tX = ray.getDirection().getX() != 0.0f ? (nextX - ray.getOrigin().getX()) / ray.getDirection().getX() : INFINITY;
-		float tY = ray.getDirection().getY() != 0.0f ? (nextY - ray.getOrigin().getY()) / ray.getDirection().getY() : INFINITY;
-		float tZ = ray.getDirection().getZ() != 0.0f ? (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ() : INFINITY;
-		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-		tMin = min(tX, min(tY, tZ));
-
 		//Create the ray at the next position
-		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+		ray = calculateNextRayPosition(ray, nextXFunc, nextYFunc, nextZFunc);
 	}
 
 	//Return EMPTY_VAL to indicate no intersection was made in the region
@@ -207,15 +206,16 @@ __device__ bool isInShadowOriginalRayMarch(Ray localRay, const VoxelSceneInfo* s
 	return false;
 }
 
-__device__ __forceinline__ Vector3f getNormalFromTValues(float tX, float tY, float tZ, float tMin, const Vector3f& rayDirection)
+__device__ __forceinline__ Vector3f getNormalFromRay(const Ray& ray)
 {
 	Vector3f normal;
-	if (tX == tMin)
-		normal = Vector3f(copysignf(1.0f, -rayDirection.getX()), 0.0f, 0.0f);
-	else if (tY == tMin)
-		normal = Vector3f(0.0f, copysignf(1.0f, -rayDirection.getY()), 0.0f);
+	//Find which ray component is esentially equal to its nearest integer. That will decide which is the normal
+	if (std::abs(ray.getOrigin().getX() - std::floorf(ray.getOrigin().getX())) < EPSILON)
+		normal = Vector3f(copysignf(1.0f, -ray.getDirection().getX()), 0.0f, 0.0f);
+	else if (std::abs(ray.getOrigin().getY() - std::floorf(ray.getOrigin().getY())) < EPSILON)
+		normal = Vector3f(0.0f, copysignf(1.0f, -ray.getDirection().getY()), 0.0f);
 	else
-		normal = Vector3f(0.0f, 0.0f, copysignf(1.0f, -rayDirection.getZ()));
+		normal = Vector3f(0.0f, 0.0f, copysignf(1.0f, -ray.getDirection().getZ()));
 	return normal;
 }
 
@@ -230,27 +230,15 @@ __device__ __forceinline__ uint32_t applyLighting(uint32_t voxelColor, const Vec
 	return applyDirectionalLightingToColor(voxelColor, normal);
 }
 
-__device__ uint32_t rayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPosition, VoxelClusterStore* storageStructure, const VoxelSceneInfo* voxelSceneInfo, Vector3i currentRegion)
+__device__ uint32_t rayMarchVoxelRegion(Ray& ray, const Vector3f regionWorldPosition, VoxelClusterStore* storageStructure, const VoxelSceneInfo* voxelSceneInfo, Vector3i currentRegion)
 {
 	//Calculate once outside of the loop to increase performance
 	float (*nextXFunc)(float) = ray.getDirection().getX() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	float (*nextYFunc)(float) = ray.getDirection().getY() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 	float (*nextZFunc)(float) = ray.getDirection().getZ() > 0.0f ? applyCeilAndPosEpsilon : applyFloorAndNegEpsilon;
 
-	//Calculate the next voxel location
-
-	float nextX = nextXFunc(ray.getOrigin().getX());
-	float nextY = nextYFunc(ray.getOrigin().getY());
-	float nextZ = nextZFunc(ray.getOrigin().getZ());
-	//Calculate the t-values along the ray
-	float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-	float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-	float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-	//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-	float tMin = min(tX, min(tY, tZ));
-
 	//Create the ray at the next position
-	ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+	ray = calculateNextRayPosition(ray, nextXFunc, nextYFunc, nextZFunc);
 
 	while (isRayInRegion(ray))
 	{
@@ -262,19 +250,8 @@ __device__ uint32_t rayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPositi
 		//Checks if a "voxel space" exists and moves the ray until it is in a valid voxel space (i.e. if a Voxel Cluster does not exist, skip to the next cluster)
 		if (!storageStructure->doesClusterExist(voxelX, voxelY, voxelZ))
 		{
-			//Skip to the next block location
-			int32_t nextX = ray.getDirection().getX() > 0.0f ? ((voxelX / 8) + 1) * 8 : (voxelX / 8) * 8;
-			int32_t nextY = ray.getDirection().getY() > 0.0f ? ((voxelY / 8) + 1) * 8 : (voxelY / 8) * 8;
-			int32_t nextZ = ray.getDirection().getZ() > 0.0f ? ((voxelZ / 8) + 1) * 8 : (voxelZ / 8) * 8;
-			//Calculate the t-values along the ray
-			float tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-			float tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-			float tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-			//Find the minimum t-value
-			float tMin = min(tX, min(tY, tZ));
-
 			//Create the ray at the next position
-			ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+			ray = calculateNextRayPositionForCluster(ray, voxelX, voxelY, voxelZ);
 			continue;
 		}
 		//Check if a voxel exists at the given voxel space
@@ -282,26 +259,14 @@ __device__ uint32_t rayMarchVoxelGrid(Ray& ray, const Vector3f regionWorldPositi
 		if (voxelColor != EMPTY_KEY)
 		{
 			//Find the normal based on which axis is hit
-			Vector3f normal = getNormalFromTValues(tX, tY, tZ, tMin, ray.getDirection());
+			Vector3f normal = getNormalFromRay(ray);
 			//Apply lighting to the color value
 			uint32_t resultingColor = applyLighting(voxelColor, normal, regionWorldPosition, ray.getOrigin());
 			return resultingColor * !isInShadowOriginalRayMarch(Ray(ray.getOrigin(), LIGHT_DIRECTION), voxelSceneInfo, currentRegion);
 		}
 
-		//Calculate the next voxel location
-
-		nextX = nextXFunc(ray.getOrigin().getX());
-		nextY = nextYFunc(ray.getOrigin().getY());
-		nextZ = nextZFunc(ray.getOrigin().getZ());
-		//Calculate the t-values along the ray
-		tX = (nextX - ray.getOrigin().getX()) / ray.getDirection().getX();
-		tY = (nextY - ray.getOrigin().getY()) / ray.getDirection().getY();
-		tZ = (nextZ - ray.getOrigin().getZ()) / ray.getDirection().getZ();
-		//Find the minimum t-value TODO add infinity consideration because of zero direction on ray
-		tMin = min(tX, min(tY, tZ));
-
 		//Create the ray at the next position
-		ray = Ray(ray.getOrigin() + (tMin + EPSILON) * ray.getDirection(), ray.getDirection());
+		ray = calculateNextRayPosition(ray, nextXFunc, nextYFunc, nextZFunc);
 	}
 
 	//Return EMPTY_VAL to indicate no intersection was made in the region
@@ -384,7 +349,7 @@ __device__ uint32_t rayMarchVoxelScene(const Ray& originalRay, const VoxelSceneI
 		//Vector is passed along for lighting calculations
 		Vector3f regionWorldPosition = sceneInfo->translationVector + Vector3f( (currentRegion.getX() - 1) * BLOCK_SIZE, (currentRegion.getY() - 1) * BLOCK_SIZE, (currentRegion.getZ() - 1) * BLOCK_SIZE);
 		//call the raymarching function for that voxel structure
-		uint32_t voxelColor = rayMarchVoxelGrid(localRay, regionWorldPosition, regionStorageStructure, sceneInfo, currentRegion);
+		uint32_t voxelColor = rayMarchVoxelRegion(localRay, regionWorldPosition, regionStorageStructure, sceneInfo, currentRegion);
 		if (voxelColor != EMPTY_VAL)
 		{
 			return voxelColor;
