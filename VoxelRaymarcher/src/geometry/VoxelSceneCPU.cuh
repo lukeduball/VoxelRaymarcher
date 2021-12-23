@@ -25,14 +25,13 @@ public:
 		uint32_t localVoxelY = ((y % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
 		uint32_t localVoxelZ = ((z % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
 
-		int32_t minVoxelRegionCoord = std::min(voxelStructureIDX, std::min(voxelStructureIDY, voxelStructureIDZ));
-		int32_t maxVoxelRegionCoord = std::max(voxelStructureIDX, std::max(voxelStructureIDY, voxelStructureIDZ));
-
-		//Set the minimum and maximum coordinates if they are larger then the previous min and max
-		if (minVoxelRegionCoord < minCoord)
-			minCoord = minVoxelRegionCoord;
-		if (maxVoxelRegionCoord > maxCoord)
-			maxCoord = maxVoxelRegionCoord;
+		minCoords[0] = std::min(voxelStructureIDX, minCoords[0]);
+		minCoords[1] = std::min(voxelStructureIDY, minCoords[1]);
+		minCoords[2] = std::min(voxelStructureIDZ, minCoords[2]);
+		
+		maxCoords[0] = std::max(voxelStructureIDX, maxCoords[0]);
+		maxCoords[1] = std::max(voxelStructureIDY, maxCoords[1]);
+		maxCoords[2] = std::max(voxelStructureIDZ, maxCoords[2]);
 
 
 		//Check if the region is already added to the map and create the map for that region if it has not
@@ -48,8 +47,8 @@ public:
 	//Generate the voxel scene and copy it to the GPU
 	void generateVoxelScene()
 	{
-		int32_t arrayDiameter = maxCoord - minCoord + 1;
-		uint32_t arraySize = arrayDiameter * arrayDiameter * arrayDiameter;
+		Vector3i arrayDiameter = getArrayDiameter();
+		uint32_t arraySize = arrayDiameter.getX() * arrayDiameter.getY() * arrayDiameter.getZ();
 
 		std::cout << "There are : " << voxelSceneStorage.size() << "/" << arraySize << " regions that are filled" << std::endl;
 
@@ -58,8 +57,8 @@ public:
 
 		for (std::pair<Vector3i, std::unordered_map<uint32_t, uint32_t>> pair : voxelSceneStorage)
 		{
-			Vector3i arrayLocation = pair.first - Vector3i(minCoord, minCoord, minCoord);
-			uint32_t arrayIndex = arrayLocation.getX() + arrayLocation.getY() * arrayDiameter + arrayLocation.getZ() * arrayDiameter * arrayDiameter;
+			Vector3i arrayLocation = pair.first - minCoords;
+			uint32_t arrayIndex = arrayLocation.getX() + arrayLocation.getY() * arrayDiameter.getX() + arrayLocation.getZ() * arrayDiameter.getX() * arrayDiameter.getY();
 
 			//Generate the voxel cluster store on the CPU
 			VoxelClusterStore* voxelClusterStore = new VoxelClusterStore(pair.second);
@@ -90,20 +89,20 @@ public:
 		cudaFree(deviceVoxelScene);
 	}
 
-	uint32_t getArrayDiameter()
+	Vector3i getArrayDiameter()
 	{
-		return maxCoord - minCoord + 1;
+		return maxCoords - minCoords + Vector3i(1, 1, 1);
 	}
 
 	uint32_t getArraySize()
 	{
-		int32_t arrayDiameter = getArrayDiameter();
-		return arrayDiameter * arrayDiameter * arrayDiameter;
+		Vector3i arrayDiameters = getArrayDiameter();
+		return arrayDiameters.getX() * arrayDiameters.getY() * arrayDiameters.getZ();
 	}
 
-	int32_t getMinCoord()
+	Vector3i getMinCoords()
 	{
-		return minCoord;
+		return minCoords;
 	}
 
 	VoxelClusterStore** deviceVoxelScene;
@@ -112,6 +111,6 @@ private:
 	//Map will be converted to an array of VoxelStructures which contain the actual voxels
 	std::unordered_map<Vector3i, std::unordered_map<uint32_t, uint32_t>, Vector3iHashFunction> voxelSceneStorage;
 	//Keeps track of the minumum and maximum coordinates to calculate the radius to allocate
-	int32_t minCoord = 0;
-	int32_t maxCoord = 0;
+	Vector3i minCoords = Vector3i(0, 0, 0);
+	Vector3i maxCoords = Vector3i(0, 0, 0);
 };

@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
 	//Populate the passed Voxel Scene with voxel data
 	populateVoxelScene(voxelScene);
 	
-	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(voxelScene.deviceVoxelScene, voxelScene.getArrayDiameter(), voxelScene.getMinCoord(), Vector3f(0.0f, 0.0f, 0.0f), scale);
+	VoxelSceneInfo voxelSceneInfo = VoxelSceneInfo(voxelScene.deviceVoxelScene, voxelScene.getArrayDiameter(), voxelScene.getMinCoords(), Vector3f(0.0f, 0.0f, 0.0f), scale);
 	CudaDeviceMemoryJanitor<VoxelSceneInfo> deviceVoxelSceneInfoJanitor(&voxelSceneInfo, "Voxel Scene Info Memory");
 
 	//Run the raymarching kernel with the specified options and scene

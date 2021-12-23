@@ -138,9 +138,9 @@ __device__ Ray calculateNextRayForRegion(const Ray& localRay, Vector3i& currentR
 __device__ float findTValueForClosestRegion(const Ray& sceneRay, const VoxelSceneInfo* sceneInfo)
 {
 	//Find the closest next location along the ray at the edge of the scene
-	int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? sceneInfo->arrDiameter + sceneInfo->minCoord : 0 + sceneInfo->minCoord;
-	int32_t nextY = sceneRay.getDirection().getY() < 0.0f ? sceneInfo->arrDiameter + sceneInfo->minCoord : 0 + sceneInfo->minCoord;
-	int32_t nextZ = sceneRay.getDirection().getZ() < 0.0f ? sceneInfo->arrDiameter + sceneInfo->minCoord : 0 + sceneInfo->minCoord;
+	int32_t nextX = sceneRay.getDirection().getX() < 0.0f ? sceneInfo->arrDiameter.getX() + sceneInfo->minCoords.getX() : 0 + sceneInfo->minCoords.getX();
+	int32_t nextY = sceneRay.getDirection().getY() < 0.0f ? sceneInfo->arrDiameter.getY() + sceneInfo->minCoords.getY() : 0 + sceneInfo->minCoords.getY();
+	int32_t nextZ = sceneRay.getDirection().getZ() < 0.0f ? sceneInfo->arrDiameter.getZ() + sceneInfo->minCoords.getZ() : 0 + sceneInfo->minCoords.getZ();
 	//Find the ray parameter values
 	float tX = (nextX * BLOCK_SIZE - sceneRay.getOrigin().getX()) / sceneRay.getDirection().getX();
 	float tY = (nextY * BLOCK_SIZE - sceneRay.getOrigin().getY()) / sceneRay.getDirection().getY();
